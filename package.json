@@ -1,0 +1,28 @@
+{
+  "name": "deoptigate",
+  "version": "0.0.0",
+  "description": "Investigates v8/Node.js function deoptimizations.",
+  "main": "deoptigate.js",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/thlorenz/deoptigate.git"
+  },
+  "homepage": "https://github.com/thlorenz/deoptigate",
+  "dependencies": {
+    "v8-ic-processor": "~0.2.1",
+    "v8-tools-core": "~0.1.1"
+  },
+  "keywords": [],
+  "author": {
+    "name": "Thorsten Lorenz",
+    "email": "thlorenz@gmx.de",
+    "url": "http://thlorenz.com"
+  },
+  "license": {
+    "type": "MIT",
+    "url": "https://github.com/thlorenz/deoptigate/blob/master/LICENSE"
+  },
+  "engine": {
+    "node": ">=8"
+  }
+}
