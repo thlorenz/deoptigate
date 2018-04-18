@@ -9,7 +9,6 @@
   },
   "homepage": "https://github.com/thlorenz/deoptigate",
   "dependencies": {
-    "v8-ic-processor": "~0.2.1",
     "v8-tools-core": "~0.1.1"
   },
   "keywords": [],
