@@ -9,6 +9,9 @@
   },
   "homepage": "https://github.com/thlorenz/deoptigate",
   "dependencies": {
+    "ansicolors": "~0.3.2",
+    "cardinal": "~1.0.0",
+    "translocator": "~0.1.1",
     "v8-tools-core": "~0.1.1"
   },
   "keywords": [],
