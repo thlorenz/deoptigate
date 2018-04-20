@@ -245,6 +245,7 @@ if (!module.parent && typeof window === 'undefined') {
   try {
     const path = require('path')
     const v8log = path.join(__dirname, 'tmp', 'v8.log')
+    // const v8log = path.join(__dirname, 'tmp', 'isolate-0x102802400-v8.log')
     const processed = await processLog(v8log)
     console.log(processed.toJSON())
   } catch (err) {
