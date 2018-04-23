@@ -11,9 +11,8 @@
   "dependencies": {
     "ansi-regex": "~3.0.0",
     "ansicolors": "~0.3.2",
-    "cardinal": "~1.0.0",
+    "cardinal": "~2.0.1",
     "text-table": "~0.2.0",
-    "translocator": "~0.1.1",
     "v8-tools-core": "~0.1.1"
   },
   "keywords": [],
