@@ -253,6 +253,18 @@ async function extractDataFromLog(p, { icStateChangesOnly }) {
   return processed
 }
 
+async function processLog(p, { icStateChangesOnly = true } = {}) {
+  const extracted = await extractDataFromLog(p, { icStateChangesOnly })
+  const data = extracted.toObject()
+  const files = await resolveFiles(data)
+  return { data, files }
+}
+
+async function logToJSON(p, { icStateChangesOnly = true } = {}) {
+  const { data, files } = await processLog(p, { icStateChangesOnly })
+  return JSON.stringify({ data, files: Array.from(files) }, null, 2)
+}
+
 async function deoptigate({ data, files }) {
   const byFile = mapByFile(data, files)
   const groups = groupByLocation(byFile)
@@ -260,9 +272,7 @@ async function deoptigate({ data, files }) {
 }
 
 async function deoptigateLog(p, { icStateChangesOnly = true } = {}) {
-  const extracted = await extractDataFromLog(p, { icStateChangesOnly })
-  const data = extracted.toObject()
-  const files = await resolveFiles(data)
+  const { data, files } = await processLog(p, { icStateChangesOnly })
   return deoptigate({ data, files })
 }
 
@@ -302,6 +312,8 @@ function render({ files, groups }, {
 }
 
 module.exports = {
-    deoptigateLog
+    processLog
+  , logToJSON
+  , deoptigateLog
   , render
 }

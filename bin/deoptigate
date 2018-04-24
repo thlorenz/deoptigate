@@ -7,7 +7,8 @@ const {
 } = require('files-provider')
 
 const {
-    deoptigateLog
+    logToJSON
+  , deoptigateLog
   , render
 } = require('../')
 
