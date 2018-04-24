@@ -4,6 +4,7 @@
 
 const { promisify } = require('util')
 const fs = require('fs')
+const path = require('path')
 const readFile = promisify(fs.readFile)
 
 const IcEntry = require('./lib/ic-entry')
@@ -11,6 +12,15 @@ const DeoptEntry = require('./lib/deopt-entry')
 const LogReader = require('v8-tools-core/logreader')
 const { Profile } = require('v8-tools-core/profile')
 const { parseOptimizationState } = require('./lib/optimization-state')
+
+const resolveFiles = require('./lib/resolve-files')
+const mapByFile = require('./lib/map-by-file')
+const groupByLocation = require('./lib/group-by-location')
+
+const Theme = require('./lib/theme.terminal')
+const SummaryRenderer = require('./lib/render-summary.terminal')
+const MarkerResolver = require('./lib/marker-resolver')
+const { highlight } = require('cardinal')
 
 function formatName(entry) {
   if (!entry) return '<unknown>'
@@ -26,8 +36,10 @@ const propertyICParser = [
 ]
 
 class DeoptProcessor extends LogReader {
-  constructor() {
+  constructor(root) {
     super()
+    this._root = root
+
     // pasing dispatch table that references `this` before invoking super
     // doesn't work, so we set it afterwards
     this.dispatchTable_ = {
@@ -210,7 +222,7 @@ class DeoptProcessor extends LogReader {
     }
   }
 
-  toJSON(indent = 2) {
+  toObject() {
     const ics = []
     for (const entry of this.entriesIC) {
       ics.push(entry.hashmap)
@@ -219,39 +231,77 @@ class DeoptProcessor extends LogReader {
     for (const entry of this.entriesDeopt) {
       deopts.push(entry.hashmap)
     }
-    return JSON.stringify({ ics, deopts }, null, indent)
+    return { ics, deopts, root: this._root }
+  }
+
+  toJSON(indent = 2) {
+    return JSON.stringify(this.toObject(), null, indent)
   }
 }
 
-function processLogContent(txt) {
-  const deoptProcessor = new DeoptProcessor()
+function processLogContent(txt, root) {
+  const deoptProcessor = new DeoptProcessor(root)
   deoptProcessor.processString(txt)
   return deoptProcessor
 }
 
-async function processLog(p, { stateChangesOnly = true } = {}) {
+async function extractDataFromLog(p, { icStateChangesOnly }) {
   const txt = await readFile(p, 'utf8')
-  const processed = processLogContent(txt)
-  if (stateChangesOnly) processed.filterIcStateChanges()
+  const root = path.dirname(p)
+  const processed = processLogContent(txt, root)
+  if (icStateChangesOnly) processed.filterIcStateChanges()
   return processed
 }
 
-// eslint-disable-next-line no-unused-vars
-function inspect(obj, { depth = 5, colors = true, maxArrayLength = 10 } = {}) {
-  console.error(require('util').inspect(obj, { depth, colors, maxArrayLength }))
+async function deoptigate({ data, files }) {
+  const byFile = mapByFile(data, files)
+  const groups = groupByLocation(byFile)
+  return { files, groups }
 }
 
-// Test
-if (!module.parent && typeof window === 'undefined') {
-(async () => {
-  try {
-    const path = require('path')
-    const v8log = path.join(__dirname, 'tmp', 'v8.log')
-    // const v8log = path.join(__dirname, 'tmp', 'isolate-0x102802400-v8.log')
-    const processed = await processLog(v8log)
-    console.log(processed.toJSON())
-  } catch (err) {
-    console.error(err)
+async function deoptigateLog(p, { icStateChangesOnly = true } = {}) {
+  const extracted = await extractDataFromLog(p, { icStateChangesOnly })
+  const data = extracted.toObject()
+  const files = await resolveFiles(data)
+  return deoptigate({ data, files })
+}
+
+function render({ files, groups }, {
+    isterminal = true
+  , deoptsOnly = true
+  , filerFilter = null
+} = {}) {
+  const results = []
+  for (const [ file, info ] of groups) {
+    let { ics, deopts, icLocations, deoptLocations } = info
+    if (deoptsOnly) {
+      ics = null
+      icLocations = null
+    }
+    const code = files.get(file).src
+    const markerResolver = new MarkerResolver({
+        deopts
+      , deoptLocations
+      , ics
+      , icLocations
+      , isterminal
+    })
+    const summaryRenderer = new SummaryRenderer({
+        deopts
+      , deoptLocations
+      , ics
+      , icLocations
+    })
+    const theme = new Theme(markerResolver).theme
+    const highlightedCode = highlight(code, { theme, linenos: true })
+    const summary = summaryRenderer.render()
+
+    results.push({ file, highlightedCode, summary })
   }
-})()
+  return results
+}
+
+module.exports = {
+    deoptigateLog
+  , render
 }

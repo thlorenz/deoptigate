@@ -1,0 +1,51 @@
+#!/usr/bin/env node
+
+const {
+    createFilesProvider
+  , RETURN
+  , PROMPT
+} = require('files-provider')
+
+const {
+    deoptigateLog
+  , render
+} = require('../')
+
+const provideFiles = createFilesProvider({
+    single       : RETURN
+  , multi        : PROMPT
+  , promptHeader : 'Deoptigator - please select a v8.log file to open: '
+  , regex        : /^(isolate-.+-)?v8.log$/
+})
+
+;(async () => {
+  try {
+    const includeAllIcs = !!(~(process.argv.indexOf('--allics')))
+    const includeIcs = includeAllIcs || !!(~(process.argv.indexOf('--ics')))
+
+    const root = process.cwd()
+    const v8logFiles = await provideFiles.fromDirectory(root)
+
+    if (v8logFiles.length === 0) {
+      console.error('Deoptigator - Problem:\n')
+      console.error('Unable to find a v8.log or isolate-*-v8.log in the current directory.')
+      console.error('Please produce it via "<node|d8> --trace-ic app.js"')
+      return
+    }
+    // TODO: option in files-provider to not show ALL
+    const v8logFile = v8logFiles[0]
+    const icStateChangesOnly = !includeAllIcs
+    const deoptsOnly = !includeIcs
+    const { files, groups } = await deoptigateLog(v8logFile.fullPath, {
+      icStateChangesOnly
+    })
+    const rendereds = render({ files, groups }, { deoptsOnly })
+    for (const { file, highlightedCode, summary } of rendereds) {
+      console.log('\nFile: %s\n\n', file)
+      console.log(highlightedCode + '\n\n')
+      console.log(summary)
+    }
+  } catch (err) {
+    console.error(err)
+  }
+})()
