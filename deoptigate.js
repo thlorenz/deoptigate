@@ -126,6 +126,8 @@ class DeoptProcessor extends LogReader {
     )
   }
 
+  // timestamp is in micro seconds
+  // https://cs.chromium.org/chromium/src/v8/src/log.cc?l=892&rcl=8fecf0eff7357c1bee222f76c4e2f6fdd8759797
   _processCodeDeopt(
       timestamp
     , size
