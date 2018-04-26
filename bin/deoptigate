@@ -15,6 +15,7 @@ const {
 const provideFiles = createFilesProvider({
     single       : RETURN
   , multi        : PROMPT
+  , choiceAll    : false
   , promptHeader : 'Deoptigator - please select a v8.log file to open: '
   , regex        : /^(isolate-.+-)?v8.log$/
 })
@@ -33,7 +34,7 @@ const provideFiles = createFilesProvider({
       console.error('Please produce it via "<node|d8> --trace-ic app.js"')
       return
     }
-    // TODO: option in files-provider to not show ALL
+
     const v8logFile = v8logFiles[0]
     const icStateChangesOnly = !includeAllIcs
     const deoptsOnly = !includeIcs
