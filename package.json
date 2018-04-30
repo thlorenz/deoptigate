@@ -2,6 +2,7 @@
   "name": "deoptigate",
   "version": "0.0.0",
   "description": "Investigates v8/Node.js function deoptimizations.",
+  "bin": "./bin/deoptigate",
   "main": "deoptigate.js",
   "repository": {
     "type": "git",
