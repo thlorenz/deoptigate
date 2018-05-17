@@ -6,11 +6,12 @@ const {
   , PROMPT
 } = require('files-provider')
 
+const { render } = require('../')
+
 const {
     logToJSON
   , deoptigateLog
-  , render
-} = require('../')
+} = require('../deoptigate.log')
 
 const provideFiles = createFilesProvider({
     single       : RETURN
@@ -24,6 +25,7 @@ const provideFiles = createFilesProvider({
   try {
     const includeAllIcs = !!(~(process.argv.indexOf('--allics')))
     const includeIcs = includeAllIcs || !!(~(process.argv.indexOf('--ics')))
+    const browser = !(~(process.argv.indexOf('--terminal')))
 
     const root = process.cwd()
     const v8logFiles = await provideFiles.fromDirectory(root)
@@ -36,6 +38,11 @@ const provideFiles = createFilesProvider({
     }
 
     const v8logFile = v8logFiles[0]
+    if (browser) {
+      const json = await logToJSON(v8logFile.fullPath)
+      console.log(json)
+      return
+    }
     const icStateChangesOnly = !includeAllIcs
     const deoptsOnly = !includeIcs
     const { files, groups } = await deoptigateLog(v8logFile.fullPath, {
