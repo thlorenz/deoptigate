@@ -1,0 +1,49 @@
+{
+  "name": "deoptigate-app",
+  "version": "0.0.0",
+  "description": "Investigates v8/Node.js function deoptimizations in the browser.",
+  "main": "main.js",
+  "scripts": {
+    "start": "budo ./main.js -p 9922"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/thlorenz/deoptigate.git"
+  },
+  "homepage": "https://github.com/thlorenz/deoptigate",
+  "keywords": [],
+  "author": {
+    "name": "Thorsten Lorenz",
+    "email": "thlorenz@gmx.de",
+    "url": "http://thlorenz.com"
+  },
+  "license": {
+    "type": "MIT",
+    "url": "https://github.com/thlorenz/deoptigate/blob/master/LICENSE"
+  },
+  "engine": {
+    "node": ">=8"
+  },
+  "devDependencies": {
+    "babel-plugin-transform-react-jsx": "~6.24.1",
+    "bubleify": "~1.2.0",
+    "budo": "~11.2.1",
+    "preact": "~8.2.9"
+  },
+  "browserify": {
+    "transform": [
+      [
+        "bubleify",
+        {
+          "target": {
+            "chrome": 63,
+            "firefox": 58,
+            "node": 8,
+            "safari": 11,
+            "edge": 16
+          }
+        }
+      ]
+    ]
+  }
+}
