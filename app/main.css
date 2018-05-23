@@ -1,6 +1,25 @@
 @import './node_modules/tachyons/css/tachyons.css';
 @import './node_modules/peacock/styles/tango.css';
+@import url('https://fonts.googleapis.com/css?family=Source+Code+Pro');
+
+.highlight pre {
+  font-size: 13px;
+  font-family: 'Source Code Pro', monospace;
+}
 
 .highlight a {
   text-decoration: none;
+}
+
+.codes-view {
+  direction: rtl;
+}
+
+.codes-view > div {
+  direction: ltr;
+}
+
+.codes-view .selected {
+  background: yellow;
+  padding: 2px;
 }

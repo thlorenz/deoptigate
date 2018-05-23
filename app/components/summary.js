@@ -2,6 +2,7 @@
 
 const React = require('react')
 const { Component } = React
+const scrollIntoView = require('scroll-into-view-if-needed')
 
 const assert = require('assert')
 
@@ -14,10 +15,19 @@ const severityClassNames = [
 class SummaryView extends Component {
   constructor(props) {
     super(props)
-    const { ics, icLocations, deopts, deoptLocations } = props
+    const { ics, icLocations, deopts, deoptLocations, onsummaryClicked } = props
 
     assert(ics == null || icLocations != null, 'need to provide locations for ics')
     assert(deopts == null || deoptLocations != null, 'need to provide locations for deopts')
+    assert.equal(typeof onsummaryClicked, 'function', 'need to pass onsummaryClicked function')
+  }
+
+  componentDidUpdate() {
+    const { selectedLocation } = this.props
+    if (selectedLocation == null) return
+    const summary = document.getElementById(`summary-location-${selectedLocation}`)
+    if (summary == null) return
+    scrollIntoView(summary, { behavior: 'smooth', scrollMode: 'if-needed' })
   }
 
   render() {
@@ -39,12 +49,12 @@ class SummaryView extends Component {
 
   _renderDeopts(deopts, deoptLocations) {
     if (deopts == null) return null
-    const { selectedId } = this.props
+    const { selectedLocation } = this.props
     const rendered = []
     for (const loc of deoptLocations) {
       const infos = deopts.get(loc)
-      const highlightedClass = selectedId === infos.id ? 'b--blue bw2' : 'bw1'
-      const className = `${highlightedClass} ba br2 ma3 pa2 bg-light-gray`
+      const highlightedClass = selectedLocation === infos.id ? 'bg-light-yellow' : 'bg-light-gray'
+      const className = `${highlightedClass} ba br2 bw1 ma3 pa2`
       rendered.push(
         <div className={className} key={infos.id}>
           {this._summary(infos)}
@@ -64,11 +74,21 @@ class SummaryView extends Component {
       , column
     } = infos[0]
     const locationEl = <span className='dark-blue f5 mr2'>{id}</span>
+    const onclicked = e => {
+      e.preventDefault()
+      e.stopPropagation()
+      this._onsummaryClicked(id)
+    }
+
     const fullLoc = (
-      <a href='#' className='i gray'>{functionName} at {file}:{line}:{column}</a>
+      <a href='#'
+        className='i gray'
+        onClick={onclicked}>
+        {functionName} at {file}:{line}:{column}
+      </a>
     )
     return (
-      <div>
+      <div id={'summary-location-' + id}>
         {locationEl}
         {fullLoc}
       </div>
@@ -116,22 +136,38 @@ class SummaryView extends Component {
       </tr>
     )
   }
+
+  _onsummaryClicked(id) {
+    const { onsummaryClicked } = this.props
+    onsummaryClicked(id)
+  }
 }
 
 class SummariesView extends Component {
   render() {
-    const { groups, selectedId } = this.props
-    return Array.from(groups)
+    const {
+        groups
+      , selectedLocation
+      , className = ''
+      , onsummaryClicked
+    } = this.props
+
+    const summaries = Array.from(groups)
       .map(([ key, { ics, icLocations, deopts, deoptLocations } ], idx) =>
         <SummaryView
           key={idx}
-          selectedId={selectedId}
+          selectedLocation={selectedLocation}
           file={key}
           ics={ics}
           icLocations={icLocations}
           deopts={deopts}
-          deoptLocations={deoptLocations} />
+          deoptLocations={deoptLocations}
+          onsummaryClicked={onsummaryClicked} />
       )
+
+    return (
+      <div className={className}>{summaries}</div>
+    )
   }
 }
 
