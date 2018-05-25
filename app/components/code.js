@@ -52,6 +52,7 @@ class CodeView extends Component {
       , icLocations
       , deoptLocations
       , selectedLocation
+      , includeAllSeverities
     } = this.props
 
     const markerResolver = new MarkerResolver({
@@ -61,6 +62,7 @@ class CodeView extends Component {
       , icLocations
       , isterminal: false
       , selectedLocation
+      , includeAllSeverities
     })
 
     const theme = new Theme(markerResolver).theme
@@ -94,6 +96,7 @@ class CodesView extends Component {
       , selectedLocation
       , className = ''
       , onmarkerClicked
+      , includeAllSeverities
     } = this.props
 
     const codes = Array.from(groups)
@@ -109,6 +112,7 @@ class CodesView extends Component {
             icLocations={icLocations}
             deopts={deopts}
             deoptLocations={deoptLocations}
+            includeAllSeverities={includeAllSeverities}
             onmarkerClicked={onmarkerClicked} />
         )
       })
