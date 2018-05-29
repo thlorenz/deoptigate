@@ -6,19 +6,13 @@ const scrollIntoView = require('scroll-into-view-if-needed')
 
 const assert = require('assert')
 const { nameIcState, severityIcState } = require('../../lib/ic-state')
+const { MIN_SEVERITY, highestSeverity } = require('../../lib/severities')
 
 const severityClassNames = [
     'green i'
   , 'blue'
   , 'red b'
 ]
-
-function highestSeverity(infos) {
-  return infos.reduce(
-      (highest, { severity }) => severity > highest ? severity : highest
-    , 0
-  )
-}
 
 class SummaryView extends Component {
   constructor(props) {
@@ -57,7 +51,7 @@ class SummaryView extends Component {
     const rendered = []
     for (const loc of icLocations) {
       const infos = ics.get(loc)
-      if (!includeAllSeverities && highestSeverity(infos) === 0) continue
+      if (!includeAllSeverities && highestSeverity(infos) <= MIN_SEVERITY) continue
 
       const highlightedClass = selectedLocation === infos.id ? 'bg-light-yellow' : 'bg-light-gray'
       const className = `${highlightedClass} ba br2 bw1 ma3 pa2`
@@ -82,7 +76,7 @@ class SummaryView extends Component {
     const rendered = []
     for (const loc of deoptLocations) {
       const infos = deopts.get(loc)
-      if (!includeAllSeverities && highestSeverity(infos) === 0) continue
+      if (!includeAllSeverities && highestSeverity(infos) <= MIN_SEVERITY) continue
 
       const highlightedClass = selectedLocation === infos.id ? 'bg-light-yellow' : 'bg-light-gray'
       const className = `${highlightedClass} ba br2 bw1 ma3 pa2`
