@@ -5,10 +5,10 @@ const { Component } = React
 const ReactDOM = require('react-dom')
 const assert = require('assert')
 const scrollIntoView = require('scroll-into-view-if-needed')
+const { highlight } = require('peacock')
 
 const Theme = require('../theme.browser')
-const MarkerResolver = require('../../lib/marker-resolver')
-const { highlight } = require('peacock')
+const MarkerResolver = require('../../lib/rendering/marker-resolver')
 
 class CodeView extends Component {
   constructor(props) {

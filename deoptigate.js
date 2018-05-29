@@ -2,19 +2,20 @@
 
 /* eslint-disable camelcase */
 
-const IcEntry = require('./lib/ic-entry')
-const DeoptEntry = require('./lib/deopt-entry')
 const LogReader = require('v8-tools-core/logreader')
 const { Profile } = require('v8-tools-core/profile')
-const { parseOptimizationState } = require('./lib/optimization-state')
-
-const mapByFile = require('./lib/map-by-file')
-const groupByLocation = require('./lib/group-by-location')
-
-const Theme = require('./lib/theme.terminal')
-const SummaryRenderer = require('./lib/render-summary.terminal')
-const MarkerResolver = require('./lib/marker-resolver')
 const { highlight } = require('cardinal')
+
+const IcEntry = require('./lib/log-processing/ic-entry')
+const DeoptEntry = require('./lib/log-processing/deopt-entry')
+const { parseOptimizationState } = require('./lib/log-processing/optimization-state')
+
+const mapByFile = require('./lib/grouping/map-by-file')
+const groupByLocation = require('./lib/grouping/group-by-location')
+
+const Theme = require('./lib/rendering/theme.terminal')
+const SummaryRenderer = require('./lib/rendering/render-summary.terminal')
+const MarkerResolver = require('./lib/rendering/marker-resolver')
 
 function formatName(entry) {
   if (!entry) return '<unknown>'

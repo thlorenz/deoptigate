@@ -6,7 +6,7 @@ const path = require('path')
 const readFile = promisify(fs.readFile)
 
 const { processLogContent, deoptigate } = require('./')
-const resolveFiles = require('./lib/resolve-files')
+const resolveFiles = require('./lib/grouping/resolve-files')
 
 async function extractDataFromLog(p, { icStateChangesOnly }) {
   const txt = await readFile(p, 'utf8')

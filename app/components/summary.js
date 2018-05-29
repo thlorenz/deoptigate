@@ -5,7 +5,7 @@ const { Component } = React
 const scrollIntoView = require('scroll-into-view-if-needed')
 
 const assert = require('assert')
-const { nameIcState, severityIcState } = require('../../lib/ic-state')
+const { nameIcState, severityIcState } = require('../../lib/log-processing/ic-state')
 const { MIN_SEVERITY, highestSeverity } = require('../../lib/severities')
 
 const severityClassNames = [
