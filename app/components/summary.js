@@ -205,11 +205,11 @@ class SummaryView extends Component {
     } = info
     const oldStateName = nameIcState(oldState)
     const severityOldState = severityIcState(oldState)
-    const oldStateClassName = severityClassNames[severityOldState]
+    const oldStateClassName = severityClassNames[severityOldState - 1]
 
     const newStateName = nameIcState(newState)
     const severityNewState = severityIcState(newState)
-    const newStateClassName = severityClassNames[severityNewState]
+    const newStateClassName = severityClassNames[severityNewState - 1]
 
     const mapString = `0x${map}`
     return (
