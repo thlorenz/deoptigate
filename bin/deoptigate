@@ -12,6 +12,7 @@ const {
     logToJSON
   , deoptigateLog
 } = require('../deoptigate.log')
+const { renderFilesSummaries } = require('../lib/rendering/file-summary.terminal')
 
 const provideFiles = createFilesProvider({
     single       : RETURN
@@ -54,6 +55,8 @@ const provideFiles = createFilesProvider({
       console.log(highlightedCode + '\n\n')
       console.log(summary)
     }
+    const filesSummaries = renderFilesSummaries(groups)
+    console.log(filesSummaries)
   } catch (err) {
     console.error(err)
   }

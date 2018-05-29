@@ -7,6 +7,7 @@ const scrollIntoView = require('scroll-into-view-if-needed')
 const assert = require('assert')
 const { nameIcState, severityIcState } = require('../../lib/log-processing/ic-state')
 const { MIN_SEVERITY, highestSeverity } = require('../../lib/severities')
+const summarizeFile = require('../../lib/grouping/summarize-file')
 
 const severityClassNames = [
     'green i'
@@ -34,6 +35,7 @@ class SummaryView extends Component {
 
   render() {
     const { ics, icLocations, deopts, deoptLocations, file } = this.props
+    summarizeFile({ ics, deopts, file })
     const renderedDeopts = this._renderDeopts(deopts, deoptLocations)
     const renderedIcs = this._renderIcs(ics, icLocations)
     return (
