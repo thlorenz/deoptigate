@@ -11,15 +11,17 @@
   text-decoration: none;
 }
 
-.codes-view {
+.code-view {
   direction: rtl;
 }
 
-.codes-view > div {
+.code-view > div {
   direction: ltr;
 }
 
-.codes-view .selected {
+.code-view .selected {
   background: yellow;
   padding: 2px;
 }
+
+.vh-85 { height: 85vh; }

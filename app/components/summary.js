@@ -34,13 +34,19 @@ class SummaryView extends Component {
   }
 
   render() {
-    const { ics, icLocations, deopts, deoptLocations, file } = this.props
+    const {
+        className = ''
+      , ics
+      , icLocations
+      , deopts
+      , deoptLocations
+      , file
+    } = this.props
     summarizeFile({ ics, deopts, file })
     const renderedDeopts = this._renderDeopts(deopts, deoptLocations)
     const renderedIcs = this._renderIcs(ics, icLocations)
     return (
-      <div>
-        <h4>{file}</h4>
+      <div className={className}>
         {renderedDeopts}
         {renderedIcs}
       </div>
@@ -222,37 +228,6 @@ class SummaryView extends Component {
     onsummaryClicked(id)
   }
 }
-
-class SummariesView extends Component {
-  render() {
-    const {
-        groups
-      , selectedLocation
-      , className = ''
-      , onsummaryClicked
-      , includeAllSeverities
-    } = this.props
-
-    const summaries = Array.from(groups)
-      .map(([ key, { ics, icLocations, deopts, deoptLocations } ], idx) =>
-        <SummaryView
-          key={idx}
-          selectedLocation={selectedLocation}
-          file={key}
-          ics={ics}
-          icLocations={icLocations}
-          deopts={deopts}
-          includeAllSeverities={includeAllSeverities}
-          deoptLocations={deoptLocations}
-          onsummaryClicked={onsummaryClicked} />
-      )
-
-    return (
-      <div className={className}>{summaries}</div>
-    )
-  }
-}
-
 module.exports = {
-  SummariesView
+  SummaryView
 }

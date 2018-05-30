@@ -45,7 +45,7 @@ class CodeView extends Component {
 
   render() {
     const {
-        file
+        className = ''
       , code
       , ics
       , deopts
@@ -68,8 +68,7 @@ class CodeView extends Component {
     const theme = new Theme(markerResolver).theme
     const highlightedCode = highlight(code, { theme, linenos: true })
     return (
-      <div>
-        <h4>{file}</h4>
+      <div className={className}>
         <div dangerouslySetInnerHTML={{__html: highlightedCode}} />
       </div>
     )
@@ -81,48 +80,6 @@ class CodeView extends Component {
   }
 }
 
-class CodesView extends Component {
-  constructor(props) {
-    super()
-
-    const { onmarkerClicked } = props
-    assert.equal(typeof onmarkerClicked, 'function', 'need to pass onmarkerClicked function')
-  }
-
-  render() {
-    const {
-        files
-      , groups
-      , selectedLocation
-      , className = ''
-      , onmarkerClicked
-      , includeAllSeverities
-    } = this.props
-
-    const codes = Array.from(groups)
-      .map(([ file, { ics, icLocations, deopts, deoptLocations } ], idx) => {
-        const code = files.get(file).src
-        return (
-          <CodeView
-            key={file}
-            selectedLocation={selectedLocation}
-            file={file}
-            code={code}
-            ics={ics}
-            icLocations={icLocations}
-            deopts={deopts}
-            deoptLocations={deoptLocations}
-            includeAllSeverities={includeAllSeverities}
-            onmarkerClicked={onmarkerClicked} />
-        )
-      })
-
-    return (
-      <div className={className}>{codes}</div>
-    )
-  }
-}
-
 module.exports = {
-  CodesView
+  CodeView
 }
