@@ -22,6 +22,10 @@ function coloredTds(arr) {
   })
 }
 
+function bySeverityScoreDesc({ summary: s1 }, { summary: s2 }) {
+  return s1.severityScore < s2.severityScore ? -1 : 1
+}
+
 class FilesView extends Component {
   constructor(props) {
     super(props)
@@ -33,9 +37,17 @@ class FilesView extends Component {
     const { groups, className = '' } = this.props
     const tableHeader = this._renderTableHeader()
     const rows = []
-    for (const [ file, info ] of groups) {
-      const { deopts, ics } = info
-      rows.push(this._renderFile({ file, deopts, ics }))
+    const filesSeverities = Array.from(groups)
+      .map(([ file, info ]) => {
+        const { deopts, ics } = info
+        const summary = summarizeFile({ ics, deopts })
+        return { file, summary }
+      })
+      .sort(bySeverityScoreDesc)
+
+    for (const { file, summary } of filesSeverities) {
+      const { icSeverities, deoptSeverities } = summary
+      rows.push(this._renderFile({ file, icSeverities, deoptSeverities }))
     }
     return (
       <div className={className}>
@@ -69,9 +81,8 @@ class FilesView extends Component {
     )
   }
 
-  _renderFile({ file, deopts, ics }) {
+  _renderFile({ file, deoptSeverities, icSeverities }) {
     const { selectedFile } = this.props
-    const { deoptSeverities, icSeverities } = summarizeFile({ ics, deopts })
     const deoptColumns = coloredTds(deoptSeverities.slice(1))
     const icColumns = coloredTds(icSeverities.slice(1))
     const onfileClicked = this._onfileClicked.bind(this, file)
