@@ -19,7 +19,7 @@ function app() {
 }
 
 function getInfo() {
-  return require('../results/data+files.json')
+  return require('../results/node.log.json')
 }
 
 class MainView extends Component {
@@ -45,7 +45,7 @@ class MainView extends Component {
     const fileDetailsClassName = 'flex flex-row justify-center ma2'
     const fileDetails = this._renderFileDetails(fileDetailsClassName)
     return (
-      <div>
+      <div className='flex-column center mw8'>
         <ToolbarView
           className='flex flex-row justify-center'
           includeAllSeverities={includeAllSeverities}
@@ -75,7 +75,7 @@ class MainView extends Component {
     return (
       <div className={className}>
         <CodeView
-          className='flex-column vh-85 overflow-scroll code-view'
+          className='flex-column vh-85 w-50 overflow-scroll code-view'
           selectedLocation={selectedLocation}
           code={code}
           ics={ics}
@@ -85,7 +85,7 @@ class MainView extends Component {
           includeAllSeverities={includeAllSeverities}
           onmarkerClicked={this._onlocationSelected} />
         <SummaryView
-          className='flex-column vh-85 overflow-scroll'
+          className='flex-column vh-85 w-50 overflow-scroll'
           file={selectedFile}
           selectedLocation={selectedLocation}
           ics={ics}
