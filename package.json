@@ -29,5 +29,6 @@
   },
   "engine": {
     "node": ">=8"
-  }
+  },
+  "devDependencies": {}
 }

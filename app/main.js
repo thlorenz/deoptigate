@@ -18,10 +18,6 @@ function app() {
   return el
 }
 
-function getInfo() {
-  return require('../results/node.log.json')
-}
-
 class MainView extends Component {
   constructor(props) {
     super(props)
@@ -110,9 +106,8 @@ class MainView extends Component {
   }
 }
 
-(async () => {
+async function deoptigateRender(info) {
   try {
-    const info = getInfo()
     const filesMap = new Map(info.files)
     const { groups, files } = await deoptigate({ data: info.data, files: filesMap })
 
@@ -123,4 +118,6 @@ class MainView extends Component {
   } catch (err) {
     console.error(err)
   }
-})()
+}
+
+module.exports = deoptigateRender
