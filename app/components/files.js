@@ -23,7 +23,7 @@ function coloredTds(arr) {
 }
 
 function bySeverityScoreDesc({ summary: s1 }, { summary: s2 }) {
-  return s1.severityScore < s2.severityScore ? -1 : 1
+  return s1.severityScore < s2.severityScore ? 1 : -1
 }
 
 class FilesView extends Component {
@@ -34,7 +34,7 @@ class FilesView extends Component {
   }
 
   render() {
-    const { groups, files, className = '' } = this.props
+    const { groups, files, includeAllSeverities, className = '' } = this.props
     const tableHeader = this._renderTableHeader()
     const rows = []
     const filesSeverities = Array.from(groups)
@@ -43,6 +43,7 @@ class FilesView extends Component {
         const summary = summarizeFile({ ics, deopts })
         return { file, summary }
       })
+      .filter(({ summary }) => includeAllSeverities || summary.hasCriticalSeverities)
       .sort(bySeverityScoreDesc)
 
     for (const { file, summary } of filesSeverities) {

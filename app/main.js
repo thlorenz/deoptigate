@@ -40,6 +40,7 @@ class MainView extends Component {
     const { selectedFile, includeAllSeverities } = this.state
     const fileDetailsClassName = 'flex flex-row justify-center ma2'
     const fileDetails = this._renderFileDetails(fileDetailsClassName)
+
     return (
       <div className='flex-column center mw8'>
         <ToolbarView
@@ -51,6 +52,7 @@ class MainView extends Component {
           selectedFile={selectedFile}
           groups={groups}
           files={files}
+          includeAllSeverities={includeAllSeverities}
           onfileClicked={this._onfileClicked}
         />
         {fileDetails}
