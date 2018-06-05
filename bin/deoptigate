@@ -8,10 +8,11 @@ const {
 
 const { render } = require('../')
 const createPage = require('../app/lib/create-page')
-const savePage = require('../app/lib/save-page')
+const { savePage, saveEntry } = require('../app/lib/save-parts')
 
 const { blue } = require('ansicolors')
 const head = blue('deoptigate')
+const opener = require('opener')
 
 const {
     logToJSON
@@ -37,25 +38,26 @@ const provideFiles = createFilesProvider({
     const v8logFiles = await provideFiles.fromDirectory(root)
 
     if (v8logFiles.length === 0) {
-      console.error(head + ' - Problem:\n')
-      console.error(head + 'Unable to find a v8.log or isolate-*-v8.log in the current directory.')
-      console.error(head + 'Please produce it via "<node|d8> --trace-ic app.js"')
+      console.error(head + ': Problem:\n')
+      console.error(head + ': Unable to find a v8.log or isolate-*-v8.log in the current directory.')
+      console.error(head + ': Please produce it via "<node|d8> --trace-ic app.js"')
       return
     }
 
     const v8logFile = v8logFiles[0]
     if (browser) {
       const json = await logToJSON(v8logFile.fullPath)
-      const html = createPage(json)
-      const dest = savePage(html)
+      const html = createPage()
+      const indexHtmlFile = savePage(html)
+      saveEntry(json)
 
         console.error(`
-${head}: Successfully generated deoptimization visualization')
+${head}: Successfully generated deoptimization visualization  🎉 ⚡ ✨
 ${head}: Saved to:
-${head}:     ${dest}
-${head}: Please open it in your browser of choice.
+${head}:     ${indexHtmlFile}
+${head}: Opening now in your default browser.
       `)
-
+      opener(indexHtmlFile)
       return
     }
     const icStateChangesOnly = !includeAllIcs

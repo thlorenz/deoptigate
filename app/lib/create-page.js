@@ -4,8 +4,7 @@ const fs = require('fs')
 const mainCss = fs.readFileSync(require.resolve('../build/deoptigate.css'), 'utf8')
 const mainJs = fs.readFileSync(require.resolve('../build/deoptigate.js'), 'utf8')
 
-function createPage(json) {
-  const miniJSON = JSON.stringify(JSON.parse(json))
+function createPage() {
 return `
 <!DOCTYPE html>
 <html>
@@ -23,10 +22,7 @@ return `
     </script>
   </head>
   <body>
-    <script>
-      const info = ${miniJSON}
-      deoptigateRender(info)
-    </script>
+    <script async src="deoptigate.render-data.js"></script>
   </body>
 </html>
 `
