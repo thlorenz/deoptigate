@@ -11,6 +11,7 @@
   text-decoration: none;
 }
 
+/* Scrollbar on left for Code View */
 .code-view {
   direction: rtl;
 }
@@ -25,3 +26,4 @@
 }
 
 .vh-85 { height: 85vh; }
+.vh-15 { height: 15vh; }

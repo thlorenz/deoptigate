@@ -42,13 +42,13 @@ class MainView extends Component {
     const fileDetails = this._renderFileDetails(fileDetailsClassName)
 
     return (
-      <div className='flex-column center mw8'>
+      <div className='flex-column center mw9 pa2'>
         <ToolbarView
           className='flex flex-row justify-center'
           includeAllSeverities={includeAllSeverities}
           onincludeAllSeveritiesChanged={this._onincludeAllSeveritiesChanged} />
         <FilesView
-          className='flex flex-row justify-center'
+          className='flex flex-row justify-center vh-15 overflow-scroll'
           selectedFile={selectedFile}
           groups={groups}
           files={files}
