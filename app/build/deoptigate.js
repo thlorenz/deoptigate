@@ -7516,7 +7516,7 @@ function coloredTds(arr) {
     const className = x > 0
       ? severityClassNames[idx] + ' tr' + underlineTdClass
       : 'silver i tr' + underlineTdClass
-    return React.createElement( 'td', { className: className }, x)
+    return React.createElement( 'td', { key: idx, className: className }, x)
   })
 }
 
@@ -7524,7 +7524,7 @@ function bySeverityScoreDesc(ref, ref$1) {
   var s1 = ref.summary;
   var s2 = ref$1.summary;
 
-  return s1.severityScore < s2.severityScore ? -1 : 1
+  return s1.severityScore < s2.severityScore ? 1 : -1
 }
 
 class FilesView extends Component {
@@ -7535,7 +7535,7 @@ class FilesView extends Component {
   }
 
   render() {
-    const { groups, className = '' } = this.props
+    const { groups, files, includeAllSeverities, className = '' } = this.props
     const tableHeader = this._renderTableHeader()
     const rows = []
     const filesSeverities = Array.from(groups)
@@ -7547,15 +7547,21 @@ class FilesView extends Component {
         const summary = summarizeFile({ ics, deopts })
         return { file, summary }
       })
+      .filter((ref) => {
+        var summary = ref.summary;
+
+        return includeAllSeverities || summary.hasCriticalSeverities;
+    })
       .sort(bySeverityScoreDesc)
 
     for (const { file, summary } of filesSeverities) {
-      const { icSeverities, deoptSeverities, relativePath } = summary
+      const { icSeverities, deoptSeverities } = summary
+      const { relativePath } = files.get(file)
       rows.push(this._renderFile({ file, relativePath, icSeverities, deoptSeverities }))
     }
     return (
       React.createElement( 'div', { className: className },
-        React.createElement( 'table', { cellspacing: '0' },
+        React.createElement( 'table', { cellSpacing: '0' },
           tableHeader,
           React.createElement( 'tbody', null, rows )
         )
@@ -7569,9 +7575,9 @@ class FilesView extends Component {
     return (
       React.createElement( 'thead', null,
         React.createElement( 'tr', null,
-          React.createElement( 'td', { className: topHeaderClass + ' bb', rowspan: '2' }, "File"),
-          React.createElement( 'td', { colspan: '3', className: topHeaderClass }, "Deoptimizations"),
-          React.createElement( 'td', { colspan: '3', className: topHeaderClass }, "Inline Caches")
+          React.createElement( 'td', { className: topHeaderClass + ' bb', rowSpan: '2' }, "File"),
+          React.createElement( 'td', { colSpan: '3', className: topHeaderClass }, "Deoptimizations"),
+          React.createElement( 'td', { colSpan: '3', className: topHeaderClass }, "Inline Caches")
         ),
         React.createElement( 'tr', null,
           React.createElement( 'td', { className: subHeaderClass }, "Severity 1"),
@@ -7597,7 +7603,7 @@ class FilesView extends Component {
     const onfileClicked = this._onfileClicked.bind(this, file)
     const selectedClass = file === selectedFile ? 'bg-light-yellow' : ''
     return (
-      React.createElement( 'tr', { className: 'bb b--silver ' + selectedClass },
+      React.createElement( 'tr', { key: relativePath, className: 'bb b--silver ' + selectedClass },
         React.createElement( 'td', null,
           React.createElement( 'a', { className: 'i silver' + underlineTdClass, href: '#', onClick: onfileClicked },
             relativePath
@@ -7661,10 +7667,11 @@ class SummaryView extends Component {
       , deopts
       , deoptLocations
       , file
+      , relativePath
     } = this.props
     summarizeFile({ ics, deopts, file })
-    const renderedDeopts = this._renderDeopts(deopts, deoptLocations)
-    const renderedIcs = this._renderIcs(ics, icLocations)
+    const renderedDeopts = this._renderDeopts(deopts, deoptLocations, relativePath)
+    const renderedIcs = this._renderIcs(ics, icLocations, relativePath)
     return (
       React.createElement( 'div', { className: className },
         renderedDeopts,
@@ -7673,7 +7680,7 @@ class SummaryView extends Component {
     )
   }
 
-  _renderIcs(ics, icLocations) {
+  _renderIcs(ics, icLocations, relativePath) {
     if (ics == null) { return null }
     const { selectedLocation, includeAllSeverities } = this.props
     const rendered = []
@@ -7685,7 +7692,7 @@ class SummaryView extends Component {
       const className = `${highlightedClass} ba br2 bw1 ma3 pa2`
       rendered.push(
         React.createElement( 'div', { className: className, key: infos.id },
-          this._summary(infos),
+          this._summary(infos, relativePath),
           this._renderIc(infos)
         )
       )
@@ -7698,7 +7705,7 @@ class SummaryView extends Component {
     )
   }
 
-  _renderDeopts(deopts, deoptLocations) {
+  _renderDeopts(deopts, deoptLocations, relativePath) {
     if (deopts == null) { return null }
     const { selectedLocation, includeAllSeverities } = this.props
     const rendered = []
@@ -7710,7 +7717,7 @@ class SummaryView extends Component {
       const className = `${highlightedClass} ba br2 bw1 ma3 pa2`
       rendered.push(
         React.createElement( 'div', { className: className, key: infos.id },
-          this._summary(infos),
+          this._summary(infos, relativePath),
           this._renderDeopt(infos)
         )
       )
@@ -7723,11 +7730,10 @@ class SummaryView extends Component {
     )
   }
 
-  _summary(infos) {
+  _summary(infos, relativePath) {
     const { id } = infos
     const {
         functionName
-      , file
       , line
       , column
     } = infos[0]
@@ -7740,7 +7746,7 @@ class SummaryView extends Component {
 
     const fullLoc = (
       React.createElement( 'a', { href: '#', className: 'i gray', onClick: onclicked },
-        functionName, " at ", file, ":", line, ":", column
+        functionName, " at ", relativePath, ":", line, ":", column
       )
     )
     return (
@@ -7938,16 +7944,17 @@ class MainView extends Component {
   }
 
   render() {
-    const { groups } = this.props
+    const { groups, files } = this.props
     const { selectedFile, includeAllSeverities } = this.state
     const fileDetailsClassName = 'flex flex-row justify-center ma2'
     const fileDetails = this._renderFileDetails(fileDetailsClassName)
+
     return (
-      React.createElement( 'div', { className: 'flex-column center mw8' },
+      React.createElement( 'div', { className: 'flex-column center mw9 pa2' },
         React.createElement( ToolbarView, {
           className: 'flex flex-row justify-center', includeAllSeverities: includeAllSeverities, onincludeAllSeveritiesChanged: this._onincludeAllSeveritiesChanged }),
         React.createElement( FilesView, {
-          className: 'flex flex-row justify-center', selectedFile: selectedFile, groups: groups, onfileClicked: this._onfileClicked }),
+          className: 'flex flex-row justify-center vh-15 overflow-scroll', selectedFile: selectedFile, groups: groups, files: files, includeAllSeverities: includeAllSeverities, onfileClicked: this._onfileClicked }),
         fileDetails
       )
     )
@@ -7962,14 +7969,14 @@ class MainView extends Component {
       )
     }
     const { ics, icLocations, deopts, deoptLocations } = groups.get(selectedFile)
-    const code = files.get(selectedFile).src
+    const { src: code, relativePath } = files.get(selectedFile)
 
     return (
       React.createElement( 'div', { className: className },
         React.createElement( CodeView, {
           className: 'flex-column vh-85 w-50 overflow-scroll code-view', selectedLocation: selectedLocation, code: code, ics: ics, icLocations: icLocations, deopts: deopts, deoptLocations: deoptLocations, includeAllSeverities: includeAllSeverities, onmarkerClicked: this._onlocationSelected }),
         React.createElement( SummaryView, {
-          className: 'flex-column vh-85 w-50 overflow-scroll', file: selectedFile, selectedLocation: selectedLocation, ics: ics, icLocations: icLocations, deopts: deopts, includeAllSeverities: includeAllSeverities, deoptLocations: deoptLocations, onsummaryClicked: this._onlocationSelected })
+          className: 'flex-column vh-85 w-50 overflow-scroll', file: selectedFile, relativePath: relativePath, selectedLocation: selectedLocation, ics: ics, icLocations: icLocations, deopts: deopts, includeAllSeverities: includeAllSeverities, deoptLocations: deoptLocations, onsummaryClicked: this._onlocationSelected })
       )
     )
   }
@@ -8001,6 +8008,7 @@ async function deoptigateRender(info) {
 }
 
 module.exports = deoptigateRender
+// deoptigateRender(require('../results/bp.app.log.json'))
 
 },{"../":51,"./components/code":6,"./components/files":7,"./components/summary":8,"./components/toolbar":9,"react":40,"react-dom":20}],11:[function(require,module,exports){
 
@@ -29656,6 +29664,8 @@ module.exports = mapByFile
 'use strict'
 
 const { highestSeverity } = require('../severities')
+const SEVERITY_2_FACTOR = 10
+const SEVERITY_3_FACTOR = 30
 
 function summarizeFile(ref) {
   var ics = ref.ics;
@@ -29672,10 +29682,25 @@ function summarizeFile(ref) {
     deoptSeverities[hs]++
   }
   const severityScore = (
-      icSeverities[1] + icSeverities[2] * 3
-    + deoptSeverities[1] + deoptSeverities[2] * 3
+      icSeverities[1]
+    + icSeverities[2] * SEVERITY_2_FACTOR
+    + icSeverities[3] * SEVERITY_3_FACTOR
+    + deoptSeverities[1]
+    + deoptSeverities[2] * SEVERITY_2_FACTOR
+    + deoptSeverities[3] * SEVERITY_3_FACTOR
   )
-  return { icSeverities, deoptSeverities, severityScore }
+  const hasCriticalSeverities = (
+       icSeverities[2] > 0
+    || icSeverities[3] > 0
+    || deoptSeverities[2] > 0
+    || deoptSeverities[3] > 0
+  )
+  return {
+      icSeverities
+    , deoptSeverities
+    , severityScore
+    , hasCriticalSeverities
+  }
 }
 
 module.exports = summarizeFile
