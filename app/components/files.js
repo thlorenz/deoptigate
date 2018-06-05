@@ -18,7 +18,7 @@ function coloredTds(arr) {
     const className = x > 0
       ? severityClassNames[idx] + ' tr' + underlineTdClass
       : 'silver i tr' + underlineTdClass
-    return <td className={className}>{x}</td>
+    return <td key={idx} className={className}>{x}</td>
   })
 }
 
@@ -34,7 +34,7 @@ class FilesView extends Component {
   }
 
   render() {
-    const { groups, className = '' } = this.props
+    const { groups, files, className = '' } = this.props
     const tableHeader = this._renderTableHeader()
     const rows = []
     const filesSeverities = Array.from(groups)
@@ -47,11 +47,12 @@ class FilesView extends Component {
 
     for (const { file, summary } of filesSeverities) {
       const { icSeverities, deoptSeverities } = summary
-      rows.push(this._renderFile({ file, icSeverities, deoptSeverities }))
+      const { relativePath } = files.get(file)
+      rows.push(this._renderFile({ file, relativePath, icSeverities, deoptSeverities }))
     }
     return (
       <div className={className}>
-        <table cellspacing='0'>
+        <table cellSpacing='0'>
           {tableHeader}
           <tbody>{rows}</tbody>
         </table>
@@ -65,9 +66,9 @@ class FilesView extends Component {
     return (
       <thead>
         <tr>
-          <td className={topHeaderClass + ' bb'} rowspan='2'>File</td>
-          <td colspan='3' className={topHeaderClass}>Deoptimizations</td>
-          <td colspan='3' className={topHeaderClass}>Inline Caches</td>
+          <td className={topHeaderClass + ' bb'} rowSpan='2'>File</td>
+          <td colSpan='3' className={topHeaderClass}>Deoptimizations</td>
+          <td colSpan='3' className={topHeaderClass}>Inline Caches</td>
         </tr>
         <tr>
           <td className={subHeaderClass}>Severity 1</td>
@@ -81,19 +82,19 @@ class FilesView extends Component {
     )
   }
 
-  _renderFile({ file, deoptSeverities, icSeverities }) {
+  _renderFile({ file, relativePath, deoptSeverities, icSeverities }) {
     const { selectedFile } = this.props
     const deoptColumns = coloredTds(deoptSeverities.slice(1))
     const icColumns = coloredTds(icSeverities.slice(1))
     const onfileClicked = this._onfileClicked.bind(this, file)
     const selectedClass = file === selectedFile ? 'bg-light-yellow' : ''
     return (
-      <tr className={'bb b--silver ' + selectedClass}>
+      <tr key={relativePath} className={'bb b--silver ' + selectedClass}>
         <td>
           <a className={'i silver' + underlineTdClass}
             href='#'
             onClick={onfileClicked}>
-            {file}
+            {relativePath}
           </a>
         </td>
         {deoptColumns}

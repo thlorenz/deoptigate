@@ -41,10 +41,11 @@ class SummaryView extends Component {
       , deopts
       , deoptLocations
       , file
+      , relativePath
     } = this.props
     summarizeFile({ ics, deopts, file })
-    const renderedDeopts = this._renderDeopts(deopts, deoptLocations)
-    const renderedIcs = this._renderIcs(ics, icLocations)
+    const renderedDeopts = this._renderDeopts(deopts, deoptLocations, relativePath)
+    const renderedIcs = this._renderIcs(ics, icLocations, relativePath)
     return (
       <div className={className}>
         {renderedDeopts}
@@ -53,7 +54,7 @@ class SummaryView extends Component {
     )
   }
 
-  _renderIcs(ics, icLocations) {
+  _renderIcs(ics, icLocations, relativePath) {
     if (ics == null) return null
     const { selectedLocation, includeAllSeverities } = this.props
     const rendered = []
@@ -65,7 +66,7 @@ class SummaryView extends Component {
       const className = `${highlightedClass} ba br2 bw1 ma3 pa2`
       rendered.push(
         <div className={className} key={infos.id}>
-          {this._summary(infos)}
+          {this._summary(infos, relativePath)}
           {this._renderIc(infos)}
         </div>
       )
@@ -78,7 +79,7 @@ class SummaryView extends Component {
     )
   }
 
-  _renderDeopts(deopts, deoptLocations) {
+  _renderDeopts(deopts, deoptLocations, relativePath) {
     if (deopts == null) return null
     const { selectedLocation, includeAllSeverities } = this.props
     const rendered = []
@@ -90,7 +91,7 @@ class SummaryView extends Component {
       const className = `${highlightedClass} ba br2 bw1 ma3 pa2`
       rendered.push(
         <div className={className} key={infos.id}>
-          {this._summary(infos)}
+          {this._summary(infos, relativePath)}
           {this._renderDeopt(infos)}
         </div>
       )
@@ -103,11 +104,10 @@ class SummaryView extends Component {
     )
   }
 
-  _summary(infos) {
+  _summary(infos, relativePath) {
     const { id } = infos
     const {
         functionName
-      , file
       , line
       , column
     } = infos[0]
@@ -122,7 +122,7 @@ class SummaryView extends Component {
       <a href='#'
         className='i gray'
         onClick={onclicked}>
-        {functionName} at {file}:{line}:{column}
+        {functionName} at {relativePath}:{line}:{column}
       </a>
     )
     return (

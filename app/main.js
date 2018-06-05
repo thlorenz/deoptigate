@@ -36,7 +36,7 @@ class MainView extends Component {
   }
 
   render() {
-    const { groups } = this.props
+    const { groups, files } = this.props
     const { selectedFile, includeAllSeverities } = this.state
     const fileDetailsClassName = 'flex flex-row justify-center ma2'
     const fileDetails = this._renderFileDetails(fileDetailsClassName)
@@ -50,6 +50,7 @@ class MainView extends Component {
           className='flex flex-row justify-center'
           selectedFile={selectedFile}
           groups={groups}
+          files={files}
           onfileClicked={this._onfileClicked}
         />
         {fileDetails}
@@ -66,7 +67,7 @@ class MainView extends Component {
       )
     }
     const { ics, icLocations, deopts, deoptLocations } = groups.get(selectedFile)
-    const code = files.get(selectedFile).src
+    const { src: code, relativePath } = files.get(selectedFile)
 
     return (
       <div className={className}>
@@ -83,6 +84,7 @@ class MainView extends Component {
         <SummaryView
           className='flex-column vh-85 w-50 overflow-scroll'
           file={selectedFile}
+          relativePath={relativePath}
           selectedLocation={selectedLocation}
           ics={ics}
           icLocations={icLocations}
