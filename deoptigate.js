@@ -8,6 +8,7 @@ const { highlight } = require('cardinal')
 
 const IcEntry = require('./lib/log-processing/ic-entry')
 const DeoptEntry = require('./lib/log-processing/deopt-entry')
+const CodeEntry = require('./lib/log-processing/code-entry')
 const { parseOptimizationState } = require('./lib/log-processing/optimization-state')
 
 const mapByFile = require('./lib/grouping/map-by-file')
@@ -17,13 +18,22 @@ const Theme = require('./lib/rendering/theme.terminal')
 const SummaryRenderer = require('./lib/rendering/render-summary.terminal')
 const MarkerResolver = require('./lib/rendering/marker-resolver')
 
+function maybeNumber(s) {
+  if (s == null) return -1
+  return parseInt(s)
+}
+
 function formatName(entry) {
   if (!entry) return '<unknown>'
   const name = entry.func.getName()
-  const re = /(.*):[0-9]+:[0-9]+$/
+  const re = /(.*):([0-9]+):([0-9]+)$/
   const array = re.exec(name)
-  if (!array) return name
-  return entry.getState() + array[1]
+  if (!array) return { fnFile: name, line: -1, column: -1 }
+  return {
+      fnFile: array[1]
+    , line: maybeNumber(array[2])
+    , column: maybeNumber(array[3])
+  }
 }
 
 const propertyICParser = [
@@ -31,9 +41,10 @@ const propertyICParser = [
 ]
 
 class DeoptProcessor extends LogReader {
-  constructor(root) {
+  constructor(root, { silentErrors = true } = {}) {
     super()
     this._root = root
+    this._silentErrors = silentErrors
 
     // pasing dispatch table that references `this` before invoking super
     // doesn't work, so we set it afterwards
@@ -95,13 +106,15 @@ class DeoptProcessor extends LogReader {
 
     this.entriesIC = []
     this.entriesDeopt = []
+
+    this.entriesCode = new Map()
   }
 
   functionInfo(pc) {
     const entry = this._profile.findEntry(pc)
     if (entry == null) return { fnFile: '', state: -1 }
-    const fnFile = formatName(entry)
-    return { fnFile, state: entry.state }
+    const { fnFile, line, column } = formatName(entry)
+    return { fnFile, line, column, state: entry.state }
   }
 
   _processPropertyIC(
@@ -170,6 +183,15 @@ class DeoptProcessor extends LogReader {
       this._profile.addFuncCode(
         type, name, timestamp, start, size, funcAddr, state
       )
+      if (type === 'LazyCompile') {
+        const { fnFile, line, column } = this.functionInfo(start)
+        const key = `${fnFile}:${line}:${column}`
+        if (!this.entriesCode.has(key)) {
+          this.entriesCode.set(key, new CodeEntry({ fnFile, line, column }))
+        }
+        const code = this.entriesCode.get(key)
+        code.addUpdate(timestamp, state)
+      }
     } else {
       this._profile.addCode(type, name, timestamp, start, size)
     }
@@ -189,6 +211,7 @@ class DeoptProcessor extends LogReader {
 
   // @override
   printError(msg) {
+    if (this._silentErrors) return
     console.trace()
     console.error(msg)
   }
@@ -226,7 +249,11 @@ class DeoptProcessor extends LogReader {
     for (const entry of this.entriesDeopt) {
       deopts.push(entry.hashmap)
     }
-    return { ics, deopts, root: this._root }
+    const codes = []
+    for (const entry of this.entriesCode.values()) {
+      codes.push(entry.hashmap)
+    }
+    return { ics, deopts, codes, root: this._root }
   }
 
   toJSON(indent = 2) {
