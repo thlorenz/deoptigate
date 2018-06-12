@@ -39,17 +39,24 @@ class FilesView extends Component {
     const rows = []
     const filesSeverities = Array.from(groups)
       .map(([ file, info ]) => {
-        const { deopts, ics } = info
-        const summary = summarizeFile({ ics, deopts })
+        const { deopts, ics, codes } = info
+        const summary = summarizeFile({ ics, deopts, codes })
         return { file, summary }
       })
       .filter(({ summary }) => includeAllSeverities || summary.hasCriticalSeverities)
       .sort(bySeverityScoreDesc)
 
     for (const { file, summary } of filesSeverities) {
-      const { icSeverities, deoptSeverities } = summary
+      const { icSeverities, deoptSeverities, codeStates } = summary
       const { relativePath } = files.get(file)
-      rows.push(this._renderFile({ file, relativePath, icSeverities, deoptSeverities }))
+      const rendered = this._renderFile({
+          file
+        , relativePath
+        , icSeverities
+        , deoptSeverities
+        , codeStates
+      })
+      rows.push(rendered)
     }
     return (
       <div className={className}>
@@ -68,10 +75,14 @@ class FilesView extends Component {
       <thead>
         <tr>
           <td className={topHeaderClass + ' bb'} rowSpan='2'>File</td>
+          <td colSpan='3' className={topHeaderClass}>Optimizations</td>
           <td colSpan='3' className={topHeaderClass}>Deoptimizations</td>
           <td colSpan='3' className={topHeaderClass}>Inline Caches</td>
         </tr>
         <tr>
+          <td className={subHeaderClass}>Optimized</td>
+          <td className={subHeaderClass}>Optimizable</td>
+          <td className={subHeaderClass}>Compiled</td>
           <td className={subHeaderClass}>Severity 1</td>
           <td className={subHeaderClass}>Severity 2</td>
           <td className={subHeaderClass}>Severity 3</td>
@@ -83,10 +94,14 @@ class FilesView extends Component {
     )
   }
 
-  _renderFile({ file, relativePath, deoptSeverities, icSeverities }) {
+  _renderFile({ file, relativePath, deoptSeverities, icSeverities, codeStates }) {
     const { selectedFile } = this.props
+
+    // Optimized = 3, Compile = 0, but we show them in order of serverity, so we reverse
+    const codeColumns = coloredTds(codeStates.reverse())
     const deoptColumns = coloredTds(deoptSeverities.slice(1))
     const icColumns = coloredTds(icSeverities.slice(1))
+
     const onfileClicked = this._onfileClicked.bind(this, file)
     const selectedClass = file === selectedFile ? 'bg-light-yellow' : ''
     return (
@@ -98,6 +113,7 @@ class FilesView extends Component {
             {relativePath}
           </a>
         </td>
+        {codeColumns}
         {deoptColumns}
         {icColumns}
       </tr>

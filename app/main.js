@@ -68,7 +68,14 @@ class MainView extends Component {
         <div className={className}>Please selecte a file in the above table</div>
       )
     }
-    const { ics, icLocations, deopts, deoptLocations } = groups.get(selectedFile)
+    const {
+        ics
+      , icLocations
+      , deopts
+      , deoptLocations
+      , codes
+      , codeLocations
+    } = groups.get(selectedFile)
     const { src: code, relativePath } = files.get(selectedFile)
 
     return (
@@ -81,6 +88,8 @@ class MainView extends Component {
           icLocations={icLocations}
           deopts={deopts}
           deoptLocations={deoptLocations}
+          codes={codes}
+          codeLocations={codeLocations}
           includeAllSeverities={includeAllSeverities}
           onmarkerClicked={this._onlocationSelected} />
         <SummaryView
@@ -91,8 +100,10 @@ class MainView extends Component {
           ics={ics}
           icLocations={icLocations}
           deopts={deopts}
-          includeAllSeverities={includeAllSeverities}
           deoptLocations={deoptLocations}
+          codes={codes}
+          codeLocations={codeLocations}
+          includeAllSeverities={includeAllSeverities}
           onsummaryClicked={this._onlocationSelected} />
       </div>
     )
@@ -125,3 +136,4 @@ async function deoptigateRender(info) {
 }
 
 module.exports = deoptigateRender
+deoptigateRender(require('../results/ns-harness.json'))

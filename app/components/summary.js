@@ -6,8 +6,11 @@ const scrollIntoView = require('scroll-into-view-if-needed')
 
 const assert = require('assert')
 const { nameIcState, severityIcState } = require('../../lib/log-processing/ic-state')
+const {
+    nameOptimizationState
+  , severityOfOptimizationState
+} = require('../../lib/log-processing/optimization-state')
 const { MIN_SEVERITY, highestSeverity } = require('../../lib/severities')
-const summarizeFile = require('../../lib/grouping/summarize-file')
 
 const severityClassNames = [
     'green i'
@@ -40,14 +43,16 @@ class SummaryView extends Component {
       , icLocations
       , deopts
       , deoptLocations
-      , file
+      , codes
+      , codeLocations
       , relativePath
     } = this.props
-    summarizeFile({ ics, deopts, file })
     const renderedDeopts = this._renderDeopts(deopts, deoptLocations, relativePath)
     const renderedIcs = this._renderIcs(ics, icLocations, relativePath)
+    const renderedCodes = this._renderCodes(codes, codeLocations, relativePath)
     return (
       <div className={className}>
+        {renderedCodes}
         {renderedDeopts}
         {renderedIcs}
       </div>
@@ -99,6 +104,31 @@ class SummaryView extends Component {
     return (
       <div key='deopts'>
         <h4 className='underline'>Deoptimizations</h4>
+        {rendered}
+      </div>
+    )
+  }
+
+  _renderCodes(codes, codeLocations, relativePath) {
+    if (codes == null) return null
+    const { selectedLocation } = this.props
+    const rendered = []
+    for (const loc of codeLocations) {
+      const infos = codes.get(loc)
+      assert(infos.length === 1, 'should never have more than one code info')
+
+      const highlightedClass = selectedLocation === infos.id ? 'bg-light-yellow' : 'bg-light-gray'
+      const className = `${highlightedClass} ba br2 bw1 ma3 pa2`
+      rendered.push(
+        <div className={className} key={infos.id}>
+          {this._summary(infos, relativePath)}
+          {this._renderCode(infos[0], infos.id)}
+        </div>
+      )
+    }
+    return (
+      <div key='optimizations'>
+        <h4 className='underline'>Optimizations</h4>
         {rendered}
       </div>
     )
@@ -223,6 +253,42 @@ class SummaryView extends Component {
       </tr>
     )
   }
+
+  _renderCode(info, id) {
+    const rows = []
+    for (const update of info.updates) {
+      rows.push(this._codeRow(update, id++))
+    }
+    return (
+      <table key={'code:' + id}>
+        <thead className='f5 b tc'>
+          <tr>
+            <td>Timestamp</td>
+            <td>Optimization State</td>
+          </tr>
+        </thead>
+        <tbody>
+          {rows}
+        </tbody>
+      </table>
+    )
+  }
+
+  _codeRow(info, id) {
+    const { timestamp, state } = info
+    const timeStampMs = (timestamp / 1E3).toFixed()
+    const codeState = nameOptimizationState(state)
+    const severity = severityOfOptimizationState(state)
+    const codeStateClassName = severityClassNames[severity - 1]
+
+    return (
+      <tr key={timestamp}>
+        <td>{timeStampMs}ms</td>
+        <td className={codeStateClassName}>{codeState}</td>
+      </tr>
+    )
+  }
+
   _onsummaryClicked(id) {
     const { onsummaryClicked } = this.props
     onsummaryClicked(id)
