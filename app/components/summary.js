@@ -10,7 +10,7 @@ const {
     nameOptimizationState
   , severityOfOptimizationState
 } = require('../../lib/log-processing/optimization-state')
-const { MIN_SEVERITY, highestSeverity, lowestSeverity } = require('../../lib/severities')
+const { MIN_SEVERITY } = require('../../lib/severities')
 
 const severityClassNames = [
     'green i'
@@ -65,7 +65,7 @@ class SummaryView extends Component {
     const rendered = []
     for (const loc of icLocations) {
       const infos = ics.get(loc)
-      if (!includeAllSeverities && highestSeverity(infos) <= MIN_SEVERITY) continue
+      if (!includeAllSeverities && infos.severity <= MIN_SEVERITY) continue
 
       const highlightedClass = selectedLocation === infos.id ? 'bg-light-yellow' : 'bg-light-gray'
       const className = `${highlightedClass} ba br2 bw1 ma3 pa2`
@@ -90,7 +90,7 @@ class SummaryView extends Component {
     const rendered = []
     for (const loc of deoptLocations) {
       const infos = deopts.get(loc)
-      if (!includeAllSeverities && highestSeverity(infos) <= MIN_SEVERITY) continue
+      if (!includeAllSeverities && infos.severity <= MIN_SEVERITY) continue
 
       const highlightedClass = selectedLocation === infos.id ? 'bg-light-yellow' : 'bg-light-gray'
       const className = `${highlightedClass} ba br2 bw1 ma3 pa2`

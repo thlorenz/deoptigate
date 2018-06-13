@@ -183,11 +183,19 @@ class DeoptProcessor extends LogReader {
       this._profile.addFuncCode(
         type, name, timestamp, start, size, funcAddr, state
       )
-      if (type === 'LazyCompile') {
-        const { fnFile, line, column } = this.functionInfo(start)
+      const isScript = type === 'Script'
+      const isUserFunction = type === 'LazyCompile'
+      if (isUserFunction || isScript) {
+        let { fnFile, line, column } = this.functionInfo(start)
+
+        // only interested in Node.js anonymous wrapper function
+        // (function (exports, require, module, __filename, __dirname) {
+        const isNodeWrapperFunction = (line === 1 && column === 1)
+        if (isScript && !isNodeWrapperFunction) return
+
         const key = `${fnFile}:${line}:${column}`
         if (!this.entriesCode.has(key)) {
-          this.entriesCode.set(key, new CodeEntry({ fnFile, line, column }))
+          this.entriesCode.set(key, new CodeEntry({ fnFile, line, column, isScript }))
         }
         const code = this.entriesCode.get(key)
         code.addUpdate(timestamp, state)

@@ -19,7 +19,8 @@ class ThemeBrowser {
       const loc = token.loc.end
       if (loc == null) return element
 
-      return element + this._markerResolver.resolve(loc)
+      const { insertBefore, insertAfter } = this._markerResolver.resolve(loc)
+      return insertBefore + element + insertAfter
     }
     return mark.bind(this)
   }

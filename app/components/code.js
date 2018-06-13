@@ -49,8 +49,10 @@ class CodeView extends Component {
       , code
       , ics
       , deopts
+      , codes
       , icLocations
       , deoptLocations
+      , codeLocations
       , selectedLocation
       , includeAllSeverities
     } = this.props
@@ -60,6 +62,8 @@ class CodeView extends Component {
       , deoptLocations
       , ics
       , icLocations
+      , codes
+      , codeLocations
       , isterminal: false
       , selectedLocation
       , includeAllSeverities
