@@ -10,7 +10,7 @@ const {
     nameOptimizationState
   , severityOfOptimizationState
 } = require('../../lib/log-processing/optimization-state')
-const { MIN_SEVERITY, highestSeverity } = require('../../lib/severities')
+const { MIN_SEVERITY, highestSeverity, lowestSeverity } = require('../../lib/severities')
 
 const severityClassNames = [
     'green i'
@@ -111,18 +111,20 @@ class SummaryView extends Component {
 
   _renderCodes(codes, codeLocations, relativePath) {
     if (codes == null) return null
-    const { selectedLocation } = this.props
+    const { selectedLocation, includeAllSeverities } = this.props
     const rendered = []
     for (const loc of codeLocations) {
       const infos = codes.get(loc)
       assert(infos.length === 1, 'should never have more than one code info')
+
+      if (!includeAllSeverities && infos.severity <= MIN_SEVERITY) continue
 
       const highlightedClass = selectedLocation === infos.id ? 'bg-light-yellow' : 'bg-light-gray'
       const className = `${highlightedClass} ba br2 bw1 ma3 pa2`
       rendered.push(
         <div className={className} key={infos.id}>
           {this._summary(infos, relativePath)}
-          {this._renderCode(infos[0], infos.id)}
+          {this._renderCode(infos[0].updates, infos.id)}
         </div>
       )
     }
@@ -254,9 +256,9 @@ class SummaryView extends Component {
     )
   }
 
-  _renderCode(info, id) {
+  _renderCode(updates, id) {
     const rows = []
-    for (const update of info.updates) {
+    for (const update of updates) {
       rows.push(this._codeRow(update, id++))
     }
     return (
