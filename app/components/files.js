@@ -34,7 +34,7 @@ class FilesView extends Component {
   }
 
   render() {
-    const { groups, files, includeAllSeverities, className = '' } = this.props
+    const { groups, includeAllSeverities, className = '' } = this.props
     const tableHeader = this._renderTableHeader()
     const rows = []
     const filesSeverities = Array.from(groups)
@@ -48,7 +48,7 @@ class FilesView extends Component {
 
     for (const { file, summary } of filesSeverities) {
       const { icSeverities, deoptSeverities, codeStates } = summary
-      const { relativePath } = files.get(file)
+      const { relativePath } = groups.get(file)
       const rendered = this._renderFile({
           file
         , relativePath

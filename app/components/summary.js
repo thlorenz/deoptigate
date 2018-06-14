@@ -26,6 +26,14 @@ class SummaryView extends Component {
     assert(ics == null || icLocations != null, 'need to provide locations for ics')
     assert(deopts == null || deoptLocations != null, 'need to provide locations for deopts')
     assert.equal(typeof onsummaryClicked, 'function', 'need to pass onsummaryClicked function')
+
+    this._bind()
+  }
+
+  _bind() {
+    this._renderIc = this._renderIc.bind(this)
+    this._renderDeopt = this._renderDeopt.bind(this)
+    this._renderCode = this._renderCode.bind(this)
   }
 
   componentDidUpdate() {
@@ -45,11 +53,10 @@ class SummaryView extends Component {
       , deoptLocations
       , codes
       , codeLocations
-      , relativePath
     } = this.props
-    const renderedDeopts = this._renderDeopts(deopts, deoptLocations, relativePath)
-    const renderedIcs = this._renderIcs(ics, icLocations, relativePath)
-    const renderedCodes = this._renderCodes(codes, codeLocations, relativePath)
+    const renderedDeopts = this._renderDeopts(deopts, deoptLocations)
+    const renderedIcs = this._renderIcs(ics, icLocations)
+    const renderedCodes = this._renderCodes(codes, codeLocations)
     return (
       <div className={className}>
         {renderedCodes}
@@ -59,23 +66,28 @@ class SummaryView extends Component {
     )
   }
 
-  _renderIcs(ics, icLocations, relativePath) {
-    if (ics == null) return null
-    const { selectedLocation, includeAllSeverities } = this.props
+  _renderDataPoint(data, locations, renderDetails) {
+    const { selectedLocation, includeAllSeverities, relativePath } = this.props
     const rendered = []
-    for (const loc of icLocations) {
-      const infos = ics.get(loc)
-      if (!includeAllSeverities && infos.severity <= MIN_SEVERITY) continue
+    for (const loc of locations) {
+      const info = data.get(loc)
+      if (!includeAllSeverities && info.severity <= MIN_SEVERITY) continue
 
-      const highlightedClass = selectedLocation === infos.id ? 'bg-light-yellow' : 'bg-light-gray'
+      const highlightedClass = selectedLocation === info.id ? 'bg-light-yellow' : 'bg-light-gray'
       const className = `${highlightedClass} ba br2 bw1 ma3 pa2`
       rendered.push(
-        <div className={className} key={infos.id}>
-          {this._summary(infos, relativePath)}
-          {this._renderIc(infos)}
+        <div className={className} key={info.id}>
+          {this._summary(info, relativePath)}
+          {renderDetails(info)}
         </div>
       )
     }
+    return rendered
+  }
+
+  _renderIcs(ics, icLocations) {
+    if (ics == null) return null
+    const rendered = this._renderDataPoint(ics, icLocations, this._renderIc)
     return (
       <div key='ics'>
         <h4 className='underline'>Inline Caches</h4>
@@ -84,23 +96,9 @@ class SummaryView extends Component {
     )
   }
 
-  _renderDeopts(deopts, deoptLocations, relativePath) {
+  _renderDeopts(deopts, deoptLocations) {
     if (deopts == null) return null
-    const { selectedLocation, includeAllSeverities } = this.props
-    const rendered = []
-    for (const loc of deoptLocations) {
-      const infos = deopts.get(loc)
-      if (!includeAllSeverities && infos.severity <= MIN_SEVERITY) continue
-
-      const highlightedClass = selectedLocation === infos.id ? 'bg-light-yellow' : 'bg-light-gray'
-      const className = `${highlightedClass} ba br2 bw1 ma3 pa2`
-      rendered.push(
-        <div className={className} key={infos.id}>
-          {this._summary(infos, relativePath)}
-          {this._renderDeopt(infos)}
-        </div>
-      )
-    }
+    const rendered = this._renderDataPoint(deopts, deoptLocations, this._renderDeopt)
     return (
       <div key='deopts'>
         <h4 className='underline'>Deoptimizations</h4>
@@ -111,23 +109,7 @@ class SummaryView extends Component {
 
   _renderCodes(codes, codeLocations, relativePath) {
     if (codes == null) return null
-    const { selectedLocation, includeAllSeverities } = this.props
-    const rendered = []
-    for (const loc of codeLocations) {
-      const infos = codes.get(loc)
-      assert(infos.length === 1, 'should never have more than one code info')
-
-      if (!includeAllSeverities && infos.severity <= MIN_SEVERITY) continue
-
-      const highlightedClass = selectedLocation === infos.id ? 'bg-light-yellow' : 'bg-light-gray'
-      const className = `${highlightedClass} ba br2 bw1 ma3 pa2`
-      rendered.push(
-        <div className={className} key={infos.id}>
-          {this._summary(infos, relativePath)}
-          {this._renderCode(infos[0].updates, infos.id)}
-        </div>
-      )
-    }
+    const rendered = this._renderDataPoint(codes, codeLocations, this._renderCode)
     return (
       <div key='optimizations'>
         <h4 className='underline'>Optimizations</h4>
@@ -136,13 +118,13 @@ class SummaryView extends Component {
     )
   }
 
-  _summary(infos, relativePath) {
-    const { id } = infos
+  _summary(info, relativePath) {
     const {
-        functionName
+        id
+      , functionName
       , line
       , column
-    } = infos[0]
+    } = info
     const locationEl = <span className='dark-blue f5 mr2'>{id}</span>
     const onclicked = e => {
       e.preventDefault()
@@ -165,13 +147,10 @@ class SummaryView extends Component {
     )
   }
 
-  _renderDeopt(infos) {
-    const rows = []
-    for (const info of infos) {
-      rows.push(this._deoptRow(info))
-    }
+  _renderDeopt(info) {
+    const rows = info.updates.map((update, idx) => this._deoptRow(update, idx))
     return (
-      <table key={'deopt:' + infos.id}>
+      <table key={'deopt:' + info.id}>
         <thead className='f5 b tc'>
           <tr>
             <td>Timestamp</td>
@@ -207,14 +186,10 @@ class SummaryView extends Component {
     )
   }
 
-  _renderIc(infos) {
-    const rows = []
-    let id = 0
-    for (const info of infos) {
-      rows.push(this._icRow(info, id++))
-    }
+  _renderIc(info) {
+    const rows = info.updates.map((update, idx) => this._icRow(update, idx))
     return (
-      <table key={'ic:' + infos.id}>
+      <table key={'ic:' + info.id}>
         <thead className='f5 b tc'>
           <tr>
             <td>Old State</td>
@@ -230,13 +205,13 @@ class SummaryView extends Component {
     )
   }
 
-  _icRow(info, id) {
+  _icRow(update, id) {
     const {
         oldState
       , newState
       , key
       , map
-    } = info
+    } = update
     const oldStateName = nameIcState(oldState)
     const severityOldState = severityIcState(oldState)
     const oldStateClassName = severityClassNames[severityOldState - 1]
@@ -256,13 +231,10 @@ class SummaryView extends Component {
     )
   }
 
-  _renderCode(updates, id) {
-    const rows = []
-    for (const update of updates) {
-      rows.push(this._codeRow(update, id++))
-    }
+  _renderCode(info) {
+    const rows = info.updates.map((update, idx) => this._codeRow(update, idx))
     return (
-      <table key={'code:' + id}>
+      <table key={'code:' + info.id}>
         <thead className='f5 b tc'>
           <tr>
             <td>Timestamp</td>

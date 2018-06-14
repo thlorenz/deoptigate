@@ -11,8 +11,7 @@ const DeoptEntry = require('./lib/log-processing/deopt-entry')
 const CodeEntry = require('./lib/log-processing/code-entry')
 const { parseOptimizationState } = require('./lib/log-processing/optimization-state')
 
-const mapByFile = require('./lib/grouping/map-by-file')
-const groupByLocation = require('./lib/grouping/group-by-location')
+const groupByFileAndLocation = require('./lib/grouping/group-by-file-and-location')
 
 const Theme = require('./lib/rendering/theme.terminal')
 const SummaryRenderer = require('./lib/rendering/render-summary.terminal')
@@ -34,6 +33,10 @@ function formatName(entry) {
     , line: maybeNumber(array[2])
     , column: maybeNumber(array[3])
   }
+}
+
+function locationKey(file, line, column) {
+  return `${file}:${line}:${column}`
 }
 
 const propertyICParser = [
@@ -104,9 +107,8 @@ class DeoptProcessor extends LogReader {
     this._deserializedEntriesNames = []
     this._profile = new Profile()
 
-    this.entriesIC = []
-    this.entriesDeopt = []
-
+    this.entriesIC = new Map()
+    this.entriesDeopt = new Map()
     this.entriesCode = new Map()
   }
 
@@ -125,25 +127,18 @@ class DeoptProcessor extends LogReader {
     , old_state
     , new_state
     , map
-    , key
+    , propertyKey
     , modifier
     , slow_reason
   ) {
     const { fnFile, state } = this.functionInfo(pc)
-    this.entriesIC.push(
-      new IcEntry(
-          type
-        , fnFile
-        , line
-        , column
-        , key
-        , old_state
-        , new_state
-        , map
-        , slow_reason
-        , state
-      )
-    )
+    const key = locationKey(fnFile, line, column)
+    if (!this.entriesIC.has(key)) {
+      const entry = new IcEntry(fnFile, line, column)
+      this.entriesIC.set(key, entry)
+    }
+    const icEntry = this.entriesIC.get(key)
+    icEntry.addUpdate(type, old_state, new_state, propertyKey, map, state)
   }
 
   // timestamp is in micro seconds
@@ -159,17 +154,15 @@ class DeoptProcessor extends LogReader {
     , deoptReasonText
   ) {
     const { fnFile, state } = this.functionInfo(code)
-    this.entriesDeopt.push(
-      new DeoptEntry(
-          timestamp
-        , fnFile
-        , inliningId
-        , sourcePositionText
-        , bailoutType
-        , deoptReasonText
-        , state
-      )
-    )
+    const { file, line, column } = DeoptEntry.disassembleSourcePosition(sourcePositionText)
+
+    const key = locationKey(file, line, column)
+    if (!this.entriesDeopt.has(key)) {
+      const entry = new DeoptEntry(fnFile, file, line, column)
+      this.entriesDeopt.set(key, entry)
+    }
+    const deoptEntry = this.entriesDeopt.get(key)
+    deoptEntry.addUpdate(timestamp, bailoutType, deoptReasonText, state, inliningId)
   }
 
   _processCodeCreation(
@@ -193,7 +186,7 @@ class DeoptProcessor extends LogReader {
         const isNodeWrapperFunction = (line === 1 && column === 1)
         if (isScript && !isNodeWrapperFunction) return
 
-        const key = `${fnFile}:${line}:${column}`
+        const key = locationKey(fnFile, line, column)
         if (!this.entriesCode.has(key)) {
           this.entriesCode.set(key, new CodeEntry({ fnFile, line, column, isScript }))
         }
@@ -224,16 +217,6 @@ class DeoptProcessor extends LogReader {
     console.error(msg)
   }
 
-  filterIcStateChanges() {
-    const entriesICChangingState = []
-    for (const entry of this.entriesIC) {
-      if (entry.oldState !== entry.newState) {
-        entriesICChangingState.push(entry)
-      }
-    }
-    this.entriesIC = entriesICChangingState
-  }
-
   processString(string) {
     var end = string.length
     var current = 0
@@ -248,13 +231,19 @@ class DeoptProcessor extends LogReader {
     }
   }
 
+  filterIcStateChanges() {
+    for (const entry of this.entriesIC.values()) {
+      entry.filterIcStateChanges()
+    }
+  }
+
   toObject() {
     const ics = []
-    for (const entry of this.entriesIC) {
+    for (const entry of this.entriesIC.values()) {
       ics.push(entry.hashmap)
     }
     const deopts = []
-    for (const entry of this.entriesDeopt) {
+    for (const entry of this.entriesDeopt.values()) {
       deopts.push(entry.hashmap)
     }
     const codes = []
@@ -272,13 +261,14 @@ class DeoptProcessor extends LogReader {
 function processLogContent(txt, root) {
   const deoptProcessor = new DeoptProcessor(root)
   deoptProcessor.processString(txt)
+  deoptProcessor.filterIcStateChanges()
+
   return deoptProcessor
 }
 
-async function deoptigate({ data, files }) {
-  const byFile = mapByFile(data, files)
-  const groups = groupByLocation(byFile)
-  return { files, groups }
+function deoptigate(groupedByFile) {
+  const groupedByFileAndLocation = groupByFileAndLocation(groupedByFile)
+  return groupedByFileAndLocation
 }
 
 function render({ files, groups }, {

@@ -36,7 +36,7 @@ class MainView extends Component {
   }
 
   render() {
-    const { groups, files } = this.props
+    const { groups } = this.props
     const { selectedFile, includeAllSeverities } = this.state
     const fileDetailsClassName = 'flex flex-row justify-center ma2'
     const fileDetails = this._renderFileDetails(fileDetailsClassName)
@@ -51,17 +51,15 @@ class MainView extends Component {
           className='flex flex-row justify-center vh-15 overflow-scroll'
           selectedFile={selectedFile}
           groups={groups}
-          files={files}
           includeAllSeverities={includeAllSeverities}
-          onfileClicked={this._onfileClicked}
-        />
+          onfileClicked={this._onfileClicked} />
         {fileDetails}
       </div>
     )
   }
 
   _renderFileDetails(className) {
-    const { groups, files } = this.props
+    const { groups } = this.props
     const { selectedFile, selectedLocation, includeAllSeverities } = this.state
     if (selectedFile == null || !groups.has(selectedFile)) {
       return (
@@ -75,15 +73,15 @@ class MainView extends Component {
       , deoptLocations
       , codes
       , codeLocations
+      , src
+      , relativePath
     } = groups.get(selectedFile)
-    const { src: code, relativePath } = files.get(selectedFile)
-
     return (
       <div className={className}>
         <CodeView
           className='flex-column vh-85 w-50 overflow-scroll code-view'
           selectedLocation={selectedLocation}
-          code={code}
+          code={src}
           ics={ics}
           icLocations={icLocations}
           deopts={deopts}
@@ -108,6 +106,7 @@ class MainView extends Component {
       </div>
     )
   }
+
   _onlocationSelected(id) {
     this.setState(Object.assign(this.state, { selectedLocation: id }))
   }
@@ -121,13 +120,12 @@ class MainView extends Component {
   }
 }
 
-async function deoptigateRender(info) {
+async function deoptigateRender(groupedByFile) {
   try {
-    const filesMap = new Map(info.files)
-    const { groups, files } = await deoptigate({ data: info.data, files: filesMap })
+    const groupedByFileAndLocation = deoptigate(groupedByFile)
 
     render(
-      <MainView groups={groups} files={files} />
+      <MainView groups={groupedByFileAndLocation} />
     , app()
     )
   } catch (err) {
@@ -136,4 +134,3 @@ async function deoptigateRender(info) {
 }
 
 module.exports = deoptigateRender
-deoptigateRender(require('../results/ns-harness.json'))

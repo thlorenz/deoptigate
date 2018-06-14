@@ -7,6 +7,7 @@ const readFile = promisify(fs.readFile)
 
 const { processLogContent, deoptigate } = require('./')
 const resolveFiles = require('./lib/grouping/resolve-files')
+const groupByFile = require('./lib/grouping/group-by-file')
 
 async function extractDataFromLog(p, { icStateChangesOnly }) {
   const txt = await readFile(p, 'utf8')
@@ -20,17 +21,18 @@ async function processLog(p, { icStateChangesOnly = true } = {}) {
   const extracted = await extractDataFromLog(p, { icStateChangesOnly })
   const data = extracted.toObject()
   const files = await resolveFiles(data)
-  return { data, files }
+  const groupedByFile = groupByFile(data, files)
+  return groupedByFile
 }
 
 async function logToJSON(p, { icStateChangesOnly = true } = {}) {
-  const { data, files } = await processLog(p, { icStateChangesOnly })
-  return JSON.stringify({ data, files: Array.from(files) }, null, 2)
+  const groupedByFile = await processLog(p, { icStateChangesOnly })
+  return JSON.stringify(Array.from(groupedByFile), null, 2)
 }
 
 async function deoptigateLog(p, { icStateChangesOnly = true } = {}) {
-  const { data, files } = await processLog(p, { icStateChangesOnly })
-  return deoptigate({ data, files })
+  const groupedByFile = await processLog(p, { icStateChangesOnly })
+  return deoptigate(groupedByFile)
 }
 
 module.exports = {
