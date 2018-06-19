@@ -7460,8 +7460,10 @@ class CodeView extends Component {
       , code
       , ics
       , deopts
+      , codes
       , icLocations
       , deoptLocations
+      , codeLocations
       , selectedLocation
       , includeAllSeverities
     } = this.props
@@ -7471,6 +7473,8 @@ class CodeView extends Component {
       , deoptLocations
       , ics
       , icLocations
+      , codes
+      , codeLocations
       , isterminal: false
       , selectedLocation
       , includeAllSeverities
@@ -7535,7 +7539,7 @@ class FilesView extends Component {
   }
 
   render() {
-    const { groups, files, includeAllSeverities, className = '' } = this.props
+    const { groups, includeAllSeverities, className = '' } = this.props
     const tableHeader = this._renderTableHeader()
     const rows = []
     const filesSeverities = Array.from(groups)
@@ -7543,8 +7547,8 @@ class FilesView extends Component {
         var file = ref[0];
         var info = ref[1];
 
-        const { deopts, ics } = info
-        const summary = summarizeFile({ ics, deopts })
+        const { deopts, ics, codes } = info
+        const summary = summarizeFile({ ics, deopts, codes })
         return { file, summary }
       })
       .filter((ref) => {
@@ -7555,9 +7559,16 @@ class FilesView extends Component {
       .sort(bySeverityScoreDesc)
 
     for (const { file, summary } of filesSeverities) {
-      const { icSeverities, deoptSeverities } = summary
-      const { relativePath } = files.get(file)
-      rows.push(this._renderFile({ file, relativePath, icSeverities, deoptSeverities }))
+      const { icSeverities, deoptSeverities, codeStates } = summary
+      const { relativePath } = groups.get(file)
+      const rendered = this._renderFile({
+          file
+        , relativePath
+        , icSeverities
+        , deoptSeverities
+        , codeStates
+      })
+      rows.push(rendered)
     }
     return (
       React.createElement( 'div', { className: className },
@@ -7576,10 +7587,14 @@ class FilesView extends Component {
       React.createElement( 'thead', null,
         React.createElement( 'tr', null,
           React.createElement( 'td', { className: topHeaderClass + ' bb', rowSpan: '2' }, "File"),
+          React.createElement( 'td', { colSpan: '3', className: topHeaderClass }, "Optimizations"),
           React.createElement( 'td', { colSpan: '3', className: topHeaderClass }, "Deoptimizations"),
           React.createElement( 'td', { colSpan: '3', className: topHeaderClass }, "Inline Caches")
         ),
         React.createElement( 'tr', null,
+          React.createElement( 'td', { className: subHeaderClass }, "Optimized"),
+          React.createElement( 'td', { className: subHeaderClass }, "Optimizable"),
+          React.createElement( 'td', { className: subHeaderClass }, "Compiled"),
           React.createElement( 'td', { className: subHeaderClass }, "Severity 1"),
           React.createElement( 'td', { className: subHeaderClass }, "Severity 2"),
           React.createElement( 'td', { className: subHeaderClass }, "Severity 3"),
@@ -7596,10 +7611,15 @@ class FilesView extends Component {
     var relativePath = ref.relativePath;
     var deoptSeverities = ref.deoptSeverities;
     var icSeverities = ref.icSeverities;
+    var codeStates = ref.codeStates;
 
     const { selectedFile } = this.props
+
+    // Optimized = 3, Compile = 0, but we show them in order of serverity, so we reverse
+    const codeColumns = coloredTds(codeStates.reverse())
     const deoptColumns = coloredTds(deoptSeverities.slice(1))
     const icColumns = coloredTds(icSeverities.slice(1))
+
     const onfileClicked = this._onfileClicked.bind(this, file)
     const selectedClass = file === selectedFile ? 'bg-light-yellow' : ''
     return (
@@ -7609,6 +7629,7 @@ class FilesView extends Component {
             relativePath
           )
         ),
+        codeColumns,
         deoptColumns,
         icColumns
       )
@@ -7623,7 +7644,7 @@ class FilesView extends Component {
 
 module.exports = { FilesView }
 
-},{"../../lib/grouping/summarize-file":55,"assert":12,"react":40}],8:[function(require,module,exports){
+},{"../../lib/grouping/summarize-file":54,"assert":12,"react":40}],8:[function(require,module,exports){
 'use strict'
 
 const React = require('react')
@@ -7632,8 +7653,11 @@ const scrollIntoView = require('scroll-into-view-if-needed')
 
 const assert = require('assert')
 const { nameIcState, severityIcState } = require('../../lib/log-processing/ic-state')
-const { MIN_SEVERITY, highestSeverity } = require('../../lib/severities')
-const summarizeFile = require('../../lib/grouping/summarize-file')
+const {
+    nameOptimizationState
+  , severityOfOptimizationState
+} = require('../../lib/log-processing/optimization-state')
+const { MIN_SEVERITY } = require('../../lib/severities')
 
 const severityClassNames = [
     'green i'
@@ -7649,6 +7673,14 @@ class SummaryView extends Component {
     assert(ics == null || icLocations != null, 'need to provide locations for ics')
     assert(deopts == null || deoptLocations != null, 'need to provide locations for deopts')
     assert.equal(typeof onsummaryClicked, 'function', 'need to pass onsummaryClicked function')
+
+    this._bind()
+  }
+
+  _bind() {
+    this._renderIc = this._renderIc.bind(this)
+    this._renderDeopt = this._renderDeopt.bind(this)
+    this._renderCode = this._renderCode.bind(this)
   }
 
   componentDidUpdate() {
@@ -7666,37 +7698,43 @@ class SummaryView extends Component {
       , icLocations
       , deopts
       , deoptLocations
-      , file
-      , relativePath
+      , codes
+      , codeLocations
     } = this.props
-    summarizeFile({ ics, deopts, file })
-    const renderedDeopts = this._renderDeopts(deopts, deoptLocations, relativePath)
-    const renderedIcs = this._renderIcs(ics, icLocations, relativePath)
+    const renderedDeopts = this._renderDeopts(deopts, deoptLocations)
+    const renderedIcs = this._renderIcs(ics, icLocations)
+    const renderedCodes = this._renderCodes(codes, codeLocations)
     return (
       React.createElement( 'div', { className: className },
+        renderedCodes,
         renderedDeopts,
         renderedIcs
       )
     )
   }
 
-  _renderIcs(ics, icLocations, relativePath) {
-    if (ics == null) { return null }
-    const { selectedLocation, includeAllSeverities } = this.props
+  _renderDataPoint(data, locations, renderDetails) {
+    const { selectedLocation, includeAllSeverities, relativePath } = this.props
     const rendered = []
-    for (const loc of icLocations) {
-      const infos = ics.get(loc)
-      if (!includeAllSeverities && highestSeverity(infos) <= MIN_SEVERITY) { continue }
+    for (const loc of locations) {
+      const info = data.get(loc)
+      if (!includeAllSeverities && info.severity <= MIN_SEVERITY) { continue }
 
-      const highlightedClass = selectedLocation === infos.id ? 'bg-light-yellow' : 'bg-light-gray'
+      const highlightedClass = selectedLocation === info.id ? 'bg-light-yellow' : 'bg-light-gray'
       const className = `${highlightedClass} ba br2 bw1 ma3 pa2`
       rendered.push(
-        React.createElement( 'div', { className: className, key: infos.id },
-          this._summary(infos, relativePath),
-          this._renderIc(infos)
+        React.createElement( 'div', { className: className, key: info.id },
+          this._summary(info, relativePath),
+          renderDetails(info)
         )
       )
     }
+    return rendered
+  }
+
+  _renderIcs(ics, icLocations) {
+    if (ics == null) { return null }
+    const rendered = this._renderDataPoint(ics, icLocations, this._renderIc)
     return (
       React.createElement( 'div', { key: 'ics' },
         React.createElement( 'h4', { className: 'underline' }, "Inline Caches"),
@@ -7705,23 +7743,9 @@ class SummaryView extends Component {
     )
   }
 
-  _renderDeopts(deopts, deoptLocations, relativePath) {
+  _renderDeopts(deopts, deoptLocations) {
     if (deopts == null) { return null }
-    const { selectedLocation, includeAllSeverities } = this.props
-    const rendered = []
-    for (const loc of deoptLocations) {
-      const infos = deopts.get(loc)
-      if (!includeAllSeverities && highestSeverity(infos) <= MIN_SEVERITY) { continue }
-
-      const highlightedClass = selectedLocation === infos.id ? 'bg-light-yellow' : 'bg-light-gray'
-      const className = `${highlightedClass} ba br2 bw1 ma3 pa2`
-      rendered.push(
-        React.createElement( 'div', { className: className, key: infos.id },
-          this._summary(infos, relativePath),
-          this._renderDeopt(infos)
-        )
-      )
-    }
+    const rendered = this._renderDataPoint(deopts, deoptLocations, this._renderDeopt)
     return (
       React.createElement( 'div', { key: 'deopts' },
         React.createElement( 'h4', { className: 'underline' }, "Deoptimizations"),
@@ -7730,13 +7754,24 @@ class SummaryView extends Component {
     )
   }
 
-  _summary(infos, relativePath) {
-    const { id } = infos
+  _renderCodes(codes, codeLocations, relativePath) {
+    if (codes == null) { return null }
+    const rendered = this._renderDataPoint(codes, codeLocations, this._renderCode)
+    return (
+      React.createElement( 'div', { key: 'optimizations' },
+        React.createElement( 'h4', { className: 'underline' }, "Optimizations"),
+        rendered
+      )
+    )
+  }
+
+  _summary(info, relativePath) {
     const {
-        functionName
+        id
+      , functionName
       , line
       , column
-    } = infos[0]
+    } = info
     const locationEl = React.createElement( 'span', { className: 'dark-blue f5 mr2' }, id)
     const onclicked = e => {
       e.preventDefault()
@@ -7757,13 +7792,10 @@ class SummaryView extends Component {
     )
   }
 
-  _renderDeopt(infos) {
-    const rows = []
-    for (const info of infos) {
-      rows.push(this._deoptRow(info))
-    }
+  _renderDeopt(info) {
+    const rows = info.updates.map((update, idx) => this._deoptRow(update, idx))
     return (
-      React.createElement( 'table', { key: 'deopt:' + infos.id },
+      React.createElement( 'table', { key: 'deopt:' + info.id },
         React.createElement( 'thead', { className: 'f5 b tc' },
           React.createElement( 'tr', null,
             React.createElement( 'td', null, "Timestamp" ),
@@ -7799,14 +7831,10 @@ class SummaryView extends Component {
     )
   }
 
-  _renderIc(infos) {
-    const rows = []
-    let id = 0
-    for (const info of infos) {
-      rows.push(this._icRow(info, id++))
-    }
+  _renderIc(info) {
+    const rows = info.updates.map((update, idx) => this._icRow(update, idx))
     return (
-      React.createElement( 'table', { key: 'ic:' + infos.id },
+      React.createElement( 'table', { key: 'ic:' + info.id },
         React.createElement( 'thead', { className: 'f5 b tc' },
           React.createElement( 'tr', null,
             React.createElement( 'td', null, "Old State" ),
@@ -7822,13 +7850,13 @@ class SummaryView extends Component {
     )
   }
 
-  _icRow(info, id) {
+  _icRow(update, id) {
     const {
         oldState
       , newState
       , key
       , map
-    } = info
+    } = update
     const oldStateName = nameIcState(oldState)
     const severityOldState = severityIcState(oldState)
     const oldStateClassName = severityClassNames[severityOldState - 1]
@@ -7847,6 +7875,39 @@ class SummaryView extends Component {
       )
     )
   }
+
+  _renderCode(info) {
+    const rows = info.updates.map((update, idx) => this._codeRow(update, idx))
+    return (
+      React.createElement( 'table', { key: 'code:' + info.id },
+        React.createElement( 'thead', { className: 'f5 b tc' },
+          React.createElement( 'tr', null,
+            React.createElement( 'td', null, "Timestamp" ),
+            React.createElement( 'td', null, "Optimization State" )
+          )
+        ),
+        React.createElement( 'tbody', null,
+          rows
+        )
+      )
+    )
+  }
+
+  _codeRow(info, id) {
+    const { timestamp, state } = info
+    const timeStampMs = (timestamp / 1E3).toFixed()
+    const codeState = nameOptimizationState(state)
+    const severity = severityOfOptimizationState(state)
+    const codeStateClassName = severityClassNames[severity - 1]
+
+    return (
+      React.createElement( 'tr', { key: timestamp },
+        React.createElement( 'td', null, timeStampMs, "ms" ),
+        React.createElement( 'td', { className: codeStateClassName }, codeState)
+      )
+    )
+  }
+
   _onsummaryClicked(id) {
     const { onsummaryClicked } = this.props
     onsummaryClicked(id)
@@ -7856,7 +7917,7 @@ module.exports = {
   SummaryView
 }
 
-},{"../../lib/grouping/summarize-file":55,"../../lib/log-processing/ic-state":58,"../../lib/severities":64,"assert":12,"react":40,"scroll-into-view-if-needed":49}],9:[function(require,module,exports){
+},{"../../lib/log-processing/ic-state":58,"../../lib/log-processing/optimization-state":59,"../../lib/severities":64,"assert":12,"react":40,"scroll-into-view-if-needed":49}],9:[function(require,module,exports){
 'use strict'
 
 const React = require('react')
@@ -7944,7 +8005,7 @@ class MainView extends Component {
   }
 
   render() {
-    const { groups, files } = this.props
+    const { groups } = this.props
     const { selectedFile, includeAllSeverities } = this.state
     const fileDetailsClassName = 'flex flex-row justify-center ma2'
     const fileDetails = this._renderFileDetails(fileDetailsClassName)
@@ -7954,32 +8015,40 @@ class MainView extends Component {
         React.createElement( ToolbarView, {
           className: 'flex flex-row justify-center', includeAllSeverities: includeAllSeverities, onincludeAllSeveritiesChanged: this._onincludeAllSeveritiesChanged }),
         React.createElement( FilesView, {
-          className: 'flex flex-row justify-center vh-15 overflow-scroll', selectedFile: selectedFile, groups: groups, files: files, includeAllSeverities: includeAllSeverities, onfileClicked: this._onfileClicked }),
+          className: 'flex flex-row justify-center vh-15 overflow-scroll', selectedFile: selectedFile, groups: groups, includeAllSeverities: includeAllSeverities, onfileClicked: this._onfileClicked }),
         fileDetails
       )
     )
   }
 
   _renderFileDetails(className) {
-    const { groups, files } = this.props
+    const { groups } = this.props
     const { selectedFile, selectedLocation, includeAllSeverities } = this.state
     if (selectedFile == null || !groups.has(selectedFile)) {
       return (
         React.createElement( 'div', { className: className }, "Please selecte a file in the above table")
       )
     }
-    const { ics, icLocations, deopts, deoptLocations } = groups.get(selectedFile)
-    const { src: code, relativePath } = files.get(selectedFile)
-
+    const {
+        ics
+      , icLocations
+      , deopts
+      , deoptLocations
+      , codes
+      , codeLocations
+      , src
+      , relativePath
+    } = groups.get(selectedFile)
     return (
       React.createElement( 'div', { className: className },
         React.createElement( CodeView, {
-          className: 'flex-column vh-85 w-50 overflow-scroll code-view', selectedLocation: selectedLocation, code: code, ics: ics, icLocations: icLocations, deopts: deopts, deoptLocations: deoptLocations, includeAllSeverities: includeAllSeverities, onmarkerClicked: this._onlocationSelected }),
+          className: 'flex-column vh-85 w-50 overflow-scroll code-view', selectedLocation: selectedLocation, code: src, ics: ics, icLocations: icLocations, deopts: deopts, deoptLocations: deoptLocations, codes: codes, codeLocations: codeLocations, includeAllSeverities: includeAllSeverities, onmarkerClicked: this._onlocationSelected }),
         React.createElement( SummaryView, {
-          className: 'flex-column vh-85 w-50 overflow-scroll', file: selectedFile, relativePath: relativePath, selectedLocation: selectedLocation, ics: ics, icLocations: icLocations, deopts: deopts, includeAllSeverities: includeAllSeverities, deoptLocations: deoptLocations, onsummaryClicked: this._onlocationSelected })
+          className: 'flex-column vh-85 w-50 overflow-scroll', file: selectedFile, relativePath: relativePath, selectedLocation: selectedLocation, ics: ics, icLocations: icLocations, deopts: deopts, deoptLocations: deoptLocations, codes: codes, codeLocations: codeLocations, includeAllSeverities: includeAllSeverities, onsummaryClicked: this._onlocationSelected })
       )
     )
   }
+
   _onlocationSelected(id) {
     this.setState(Object.assign(this.state, { selectedLocation: id }))
   }
@@ -7993,13 +8062,12 @@ class MainView extends Component {
   }
 }
 
-async function deoptigateRender(info) {
+async function deoptigateRender(groupedByFile) {
   try {
-    const filesMap = new Map(info.files)
-    const { groups, files } = await deoptigate({ data: info.data, files: filesMap })
+    const groupedByFileAndLocation = deoptigate(groupedByFile)
 
     render(
-      React.createElement( MainView, { groups: groups, files: files })
+      React.createElement( MainView, { groups: groupedByFileAndLocation })
     , app()
     )
   } catch (err) {
@@ -8008,7 +8076,6 @@ async function deoptigateRender(info) {
 }
 
 module.exports = deoptigateRender
-// deoptigateRender(require('../results/bp.app.log.json'))
 
 },{"../":51,"./components/code":6,"./components/files":7,"./components/summary":8,"./components/toolbar":9,"react":40,"react-dom":20}],11:[function(require,module,exports){
 
@@ -29035,7 +29102,8 @@ class ThemeBrowser {
       const loc = token.loc.end
       if (loc == null) { return element }
 
-      return element + this._markerResolver.resolve(loc)
+      const { insertBefore, insertAfter } = this._markerResolver.resolve(loc)
+      return insertBefore + element + insertAfter
     }
     return mark.bind(this)
   }
@@ -29244,22 +29312,35 @@ const { highlight } = require('cardinal')
 
 const IcEntry = require('./lib/log-processing/ic-entry')
 const DeoptEntry = require('./lib/log-processing/deopt-entry')
+const CodeEntry = require('./lib/log-processing/code-entry')
 const { parseOptimizationState } = require('./lib/log-processing/optimization-state')
 
-const mapByFile = require('./lib/grouping/map-by-file')
-const groupByLocation = require('./lib/grouping/group-by-location')
+const groupByFileAndLocation = require('./lib/grouping/group-by-file-and-location')
 
 const Theme = require('./lib/rendering/theme.terminal')
 const SummaryRenderer = require('./lib/rendering/render-summary.terminal')
 const MarkerResolver = require('./lib/rendering/marker-resolver')
 
+function maybeNumber(s) {
+  if (s == null) return -1
+  return parseInt(s)
+}
+
 function formatName(entry) {
   if (!entry) return '<unknown>'
   const name = entry.func.getName()
-  const re = /(.*):[0-9]+:[0-9]+$/
+  const re = /(.*):([0-9]+):([0-9]+)$/
   const array = re.exec(name)
-  if (!array) return name
-  return entry.getState() + array[1]
+  if (!array) return { fnFile: name, line: -1, column: -1 }
+  return {
+      fnFile: array[1]
+    , line: maybeNumber(array[2])
+    , column: maybeNumber(array[3])
+  }
+}
+
+function locationKey(file, line, column) {
+  return `${file}:${line}:${column}`
 }
 
 const propertyICParser = [
@@ -29267,9 +29348,10 @@ const propertyICParser = [
 ]
 
 class DeoptProcessor extends LogReader {
-  constructor(root) {
+  constructor(root, { silentErrors = true } = {}) {
     super()
     this._root = root
+    this._silentErrors = silentErrors
 
     // pasing dispatch table that references `this` before invoking super
     // doesn't work, so we set it afterwards
@@ -29329,15 +29411,16 @@ class DeoptProcessor extends LogReader {
     this._deserializedEntriesNames = []
     this._profile = new Profile()
 
-    this.entriesIC = []
-    this.entriesDeopt = []
+    this.entriesIC = new Map()
+    this.entriesDeopt = new Map()
+    this.entriesCode = new Map()
   }
 
   functionInfo(pc) {
     const entry = this._profile.findEntry(pc)
     if (entry == null) return { fnFile: '', state: -1 }
-    const fnFile = formatName(entry)
-    return { fnFile, state: entry.state }
+    const { fnFile, line, column } = formatName(entry)
+    return { fnFile, line, column, state: entry.state }
   }
 
   _processPropertyIC(
@@ -29348,25 +29431,18 @@ class DeoptProcessor extends LogReader {
     , old_state
     , new_state
     , map
-    , key
+    , propertyKey
     , modifier
     , slow_reason
   ) {
     const { fnFile, state } = this.functionInfo(pc)
-    this.entriesIC.push(
-      new IcEntry(
-          type
-        , fnFile
-        , line
-        , column
-        , key
-        , old_state
-        , new_state
-        , map
-        , slow_reason
-        , state
-      )
-    )
+    const key = locationKey(fnFile, line, column)
+    if (!this.entriesIC.has(key)) {
+      const entry = new IcEntry(fnFile, line, column)
+      this.entriesIC.set(key, entry)
+    }
+    const icEntry = this.entriesIC.get(key)
+    icEntry.addUpdate(type, old_state, new_state, propertyKey, map, state)
   }
 
   // timestamp is in micro seconds
@@ -29382,17 +29458,15 @@ class DeoptProcessor extends LogReader {
     , deoptReasonText
   ) {
     const { fnFile, state } = this.functionInfo(code)
-    this.entriesDeopt.push(
-      new DeoptEntry(
-          timestamp
-        , fnFile
-        , inliningId
-        , sourcePositionText
-        , bailoutType
-        , deoptReasonText
-        , state
-      )
-    )
+    const { file, line, column } = DeoptEntry.disassembleSourcePosition(sourcePositionText)
+
+    const key = locationKey(file, line, column)
+    if (!this.entriesDeopt.has(key)) {
+      const entry = new DeoptEntry(fnFile, file, line, column)
+      this.entriesDeopt.set(key, entry)
+    }
+    const deoptEntry = this.entriesDeopt.get(key)
+    deoptEntry.addUpdate(timestamp, bailoutType, deoptReasonText, state, inliningId)
   }
 
   _processCodeCreation(
@@ -29406,6 +29480,23 @@ class DeoptProcessor extends LogReader {
       this._profile.addFuncCode(
         type, name, timestamp, start, size, funcAddr, state
       )
+      const isScript = type === 'Script'
+      const isUserFunction = type === 'LazyCompile'
+      if (isUserFunction || isScript) {
+        let { fnFile, line, column } = this.functionInfo(start)
+
+        // only interested in Node.js anonymous wrapper function
+        // (function (exports, require, module, __filename, __dirname) {
+        const isNodeWrapperFunction = (line === 1 && column === 1)
+        if (isScript && !isNodeWrapperFunction) return
+
+        const key = locationKey(fnFile, line, column)
+        if (!this.entriesCode.has(key)) {
+          this.entriesCode.set(key, new CodeEntry({ fnFile, line, column, isScript }))
+        }
+        const code = this.entriesCode.get(key)
+        code.addUpdate(timestamp, state)
+      }
     } else {
       this._profile.addCode(type, name, timestamp, start, size)
     }
@@ -29425,18 +29516,9 @@ class DeoptProcessor extends LogReader {
 
   // @override
   printError(msg) {
+    if (this._silentErrors) return
     console.trace()
     console.error(msg)
-  }
-
-  filterIcStateChanges() {
-    const entriesICChangingState = []
-    for (const entry of this.entriesIC) {
-      if (entry.oldState !== entry.newState) {
-        entriesICChangingState.push(entry)
-      }
-    }
-    this.entriesIC = entriesICChangingState
   }
 
   processString(string) {
@@ -29453,16 +29535,29 @@ class DeoptProcessor extends LogReader {
     }
   }
 
+  filterIcStateChanges() {
+    const emptyEntries = new Set()
+    for (const [ key, entry ] of this.entriesIC) {
+      entry.filterIcStateChanges()
+      if (entry.updates.length === 0) emptyEntries.add(key)
+    }
+    for (const key of emptyEntries) this.entriesIC.delete(key)
+  }
+
   toObject() {
     const ics = []
-    for (const entry of this.entriesIC) {
+    for (const entry of this.entriesIC.values()) {
       ics.push(entry.hashmap)
     }
     const deopts = []
-    for (const entry of this.entriesDeopt) {
+    for (const entry of this.entriesDeopt.values()) {
       deopts.push(entry.hashmap)
     }
-    return { ics, deopts, root: this._root }
+    const codes = []
+    for (const entry of this.entriesCode.values()) {
+      codes.push(entry.hashmap)
+    }
+    return { ics, deopts, codes, root: this._root }
   }
 
   toJSON(indent = 2) {
@@ -29473,13 +29568,14 @@ class DeoptProcessor extends LogReader {
 function processLogContent(txt, root) {
   const deoptProcessor = new DeoptProcessor(root)
   deoptProcessor.processString(txt)
+  deoptProcessor.filterIcStateChanges()
+
   return deoptProcessor
 }
 
-async function deoptigate({ data, files }) {
-  const byFile = mapByFile(data, files)
-  const groups = groupByLocation(byFile)
-  return { files, groups }
+function deoptigate(groupedByFile) {
+  const groupedByFileAndLocation = groupByFileAndLocation(groupedByFile)
+  return groupedByFileAndLocation
 }
 
 function render({ files, groups }, {
@@ -29523,7 +29619,7 @@ module.exports = {
   , deoptigate
 }
 
-},{"./lib/grouping/group-by-location":52,"./lib/grouping/map-by-file":54,"./lib/log-processing/deopt-entry":56,"./lib/log-processing/ic-entry":57,"./lib/log-processing/optimization-state":59,"./lib/rendering/marker-resolver":60,"./lib/rendering/render-summary.terminal":61,"./lib/rendering/theme.terminal":62,"cardinal":67,"v8-tools-core/logreader":77,"v8-tools-core/profile":78}],52:[function(require,module,exports){
+},{"./lib/grouping/group-by-file-and-location":52,"./lib/log-processing/code-entry":55,"./lib/log-processing/deopt-entry":56,"./lib/log-processing/ic-entry":57,"./lib/log-processing/optimization-state":59,"./lib/rendering/marker-resolver":60,"./lib/rendering/render-summary.terminal":61,"./lib/rendering/theme.terminal":62,"cardinal":67,"v8-tools-core/logreader":77,"v8-tools-core/profile":78}],52:[function(require,module,exports){
 'use strict'
 
 const {
@@ -29531,83 +29627,105 @@ const {
   , byLocationKey
 } = require('./location')
 
-function byTimeStamp(a, b) {
-  return a.timestamp < b.timestamp ? -1 : 1
-}
+class FileLocationGrouper {
+  constructor(fileGroup) {
+    this._id = 0
+    this._fileGroup = fileGroup
+  }
 
-function getLocationGroups(data) {
-  const { ics, deopts } = data
-  const icsByLocation = new Map()
-  const deoptsByLocation = new Map()
+  locationsForFileGroup() {
+    this._icsByLocation = new Map()
+    this._deoptsByLocation = new Map()
+    this._codesByLocation = new Map()
 
-  const deoptLocations = new Set()
-  const icLocations = new Set()
-  let id = 1
+    this._deoptLocations = new Set()
+    this._icLocations = new Set()
+    this._codeLocations = new Set()
 
-  for (const deopt of deopts) {
-    const locationKey = keyLocation(deopt)
-    if (deoptsByLocation.has(locationKey)) {
-      deoptsByLocation.get(locationKey).push(deopt)
-    } else {
-      const info = [ deopt ]
-      info.id = id++
-      deoptsByLocation.set(locationKey, info)
-      deoptLocations.add(locationKey)
+    const { ics, deopts, codes } = this._fileGroup
+    const {
+        dataByLocation: icsByLocation
+      , locations: icLocations
+    } = this._extractLocations(ics)
+    const {
+        dataByLocation: deoptsByLocation
+      , locations: deoptLocations
+    } = this._extractLocations(deopts)
+    const {
+        dataByLocation: codesByLocation
+      , locations: codeLocations
+    } = this._extractLocations(codes)
+
+    const sortedIcLocations = Array.from(icLocations).sort(byLocationKey)
+    const sortedDeoptLocations = Array.from(deoptLocations).sort(byLocationKey)
+    const sortedCodeLocations = Array.from(codeLocations).sort(byLocationKey)
+    return {
+        icsByLocation
+      , deoptsByLocation
+      , codesByLocation
+      , icLocations    : sortedIcLocations
+      , deoptLocations : sortedDeoptLocations
+      , codeLocations  : sortedCodeLocations
     }
   }
 
-  for (const ic of ics) {
-    const locationKey = keyLocation(ic)
-    if (icsByLocation.has(locationKey)) {
-      icsByLocation.get(locationKey).push(ic)
-    } else {
-      const info = [ ic ]
-      info.id = id++
-      icsByLocation.set(locationKey, info)
-      icLocations.add(locationKey)
+  _extractLocations(dataPoints) {
+    const dataByLocation = new Map()
+    const locations = new Set()
+    for (const dataPoint of dataPoints) {
+      const { functionName, line, column } = dataPoint
+      const locationKey = keyLocation({ functionName, line, column })
+      locations.add(locationKey)
+      dataPoint.id = this._id++
+      dataByLocation.set(locationKey, dataPoint)
     }
-  }
-
-  // Node.js adds timestamp of -1 which is invalid, so sorting makes
-  // no sense and we keep things in the order they arrived
-  for (const arr of deoptsByLocation.values()) {
-    if (arr.length > 0 && arr[0].timestamp > 0) arr.sort(byTimeStamp)
-  }
-
-  const sortedIcLocations = Array.from(icLocations).sort(byLocationKey)
-  const sortedDeoptLocations = Array.from(deoptLocations).sort(byLocationKey)
-  return {
-      ics: icsByLocation
-    , deopts: deoptsByLocation
-    , icLocations: sortedIcLocations
-    , deoptLocations: sortedDeoptLocations
+    return { dataByLocation, locations }
   }
 }
 
-function groupByLocation(byFile) {
-  const acc = new Map()
-  for (const [ file, data ] of byFile) {
-    const grouped = getLocationGroups(data)
-    acc.set(file, grouped)
+function groupByFileAndLocation(groupedByFile) {
+  const groupedByFileAndLocation = new Map()
+  for (const [ file, fileGroup ] of groupedByFile) {
+    const fileLocationGrouper = new FileLocationGrouper(fileGroup)
+
+    const {
+        icsByLocation
+      , deoptsByLocation
+      , codesByLocation
+      , deoptLocations
+      , icLocations
+      , codeLocations
+    } = fileLocationGrouper.locationsForFileGroup()
+
+    groupedByFileAndLocation
+      .set(file, Object.assign(fileGroup, {
+        ics    : icsByLocation
+      , deopts : deoptsByLocation
+      , codes  : codesByLocation
+      , deoptLocations
+      , icLocations
+      , codeLocations
+    }))
   }
-  return acc
+
+  return groupedByFileAndLocation
 }
 
-module.exports = groupByLocation
+module.exports = groupByFileAndLocation
 
 },{"./location":53}],53:[function(require,module,exports){
 'use strict'
 
-function keyLocation({ line, column }) {
+function keyLocation({ functionName, line, column }) {
   // need to customize key since Objects get different key
   // per instance even if line + column are the same
-  return `${line}:${column}`
+  return `${functionName}:${line}:${column}`
 }
 
 function unkeyLocation(key) {
   if (key == null) return null
-  const [ line, column ] = key.split(':')
-  return { line: parseInt(line), column: parseInt(column) }
+  const [ functionName, line, column ] = key.split(':')
+  return { functionName, line: parseInt(line), column: parseInt(column) }
 }
 
 function byLocation(a, b) {
@@ -29634,53 +29752,45 @@ module.exports = {
 },{}],54:[function(require,module,exports){
 'use strict'
 
-function mapByFile(data, files) {
-  const { ics, deopts } = data
-  const acc = new Map()
-  for (const ic of ics) {
-    const { file } = ic
-    if (file == null || !files.has(file)) continue
-    if (!acc.has(file)) {
-      acc.set(file, Object.assign({ ics: [], deopts: [] }, files.get(ic.file)))
-    }
-    const { ics } = acc.get(file)
-    ics.push(ic)
-  }
-  for (const deopt of deopts) {
-    const { file } = deopt
-    if (file == null || !files.has(file)) continue
-    if (!acc.has(file)) {
-      acc.set(file, Object.assign({ ics: [], deopts: [] }, files.get(deopt.file)))
-    }
-    const { deopts } = acc.get(file)
-    deopts.push(deopt)
-  }
-  return acc
-}
-
-module.exports = mapByFile
-
-},{}],55:[function(require,module,exports){
-'use strict'
-
-const { highestSeverity } = require('../severities')
+const { highestSeverity, lowestSeverity } = require('../severities')
 const SEVERITY_2_FACTOR = 10
 const SEVERITY_3_FACTOR = 30
+
+function addLastCodeState(codeStates, updates) {
+  const lastState = updates[updates.length - 1].state
+  codeStates[lastState]++
+}
 
 function summarizeFile(ref) {
   var ics = ref.ics;
   var deopts = ref.deopts;
+  var codes = ref.codes;
 
   const icSeverities = [ 0, 0, 0, 0 ]
   const deoptSeverities = [ 0, 0, 0, 0 ]
-  for (const infos of ics.values()) {
-    const hs = highestSeverity(infos)
+  const codeSeverities = [ 0, 0, 0, 0 ]
+  const codeStates = [ 0, 0, 0 ]
+  for (const icVector of ics.values()) {
+    const hs = highestSeverity(icVector.updates)
+    icVector.severity = hs
     icSeverities[hs]++
   }
-  for (const infos of deopts.values()) {
-    const hs = highestSeverity(infos)
+  for (const deoptVector of deopts.values()) {
+    const hs = highestSeverity(deoptVector.updates)
+    deoptVector.severity = hs
     deoptSeverities[hs]++
   }
+  for (const codeVector of codes.values()) {
+    const { updates } = codeVector
+    let hs = lowestSeverity(updates)
+    // if there are lots of updates that means the function was optimized a lot
+    // which could point to an issue
+    if (updates.length > 3) { hs = Math.max(hs, 3) }
+    deoptSeverities[hs]++
+    codeVector.severity = hs
+    addLastCodeState(codeStates, updates)
+  }
+
   const severityScore = (
       icSeverities[1]
     + icSeverities[2] * SEVERITY_2_FACTOR
@@ -29688,16 +29798,23 @@ function summarizeFile(ref) {
     + deoptSeverities[1]
     + deoptSeverities[2] * SEVERITY_2_FACTOR
     + deoptSeverities[3] * SEVERITY_3_FACTOR
+    + codeSeverities[1]
+    + codeSeverities[2] * SEVERITY_2_FACTOR
+    + codeSeverities[3] * SEVERITY_3_FACTOR
   )
   const hasCriticalSeverities = (
        icSeverities[2] > 0
     || icSeverities[3] > 0
     || deoptSeverities[2] > 0
     || deoptSeverities[3] > 0
+    || codeSeverities[2] > 0
+    || codeSeverities[3] > 0
   )
   return {
       icSeverities
     , deoptSeverities
+    , codeSeverities
+    , codeStates
     , severityScore
     , hasCriticalSeverities
   }
@@ -29705,12 +29822,52 @@ function summarizeFile(ref) {
 
 module.exports = summarizeFile
 
-},{"../severities":64}],56:[function(require,module,exports){
+},{"../severities":64}],55:[function(require,module,exports){
+'use strict'
+
+const { severityOfOptimizationState }  = require('./optimization-state')
+
+function normalizeFile(file) {
+  // Node.js adds :line:column to the end
+  return file.split(':')[0]
+}
+
+class CodeEntry {
+  constructor({ fnFile, line, column, isScript }) {
+    const parts = fnFile.split(' ')
+    this._functionName = parts[0]
+    this._file = normalizeFile(parts[1])
+    this._line = line
+    this._column = column
+    this._isScript = isScript
+
+    this.updates = []
+  }
+
+  addUpdate(timestamp, state) {
+    const severity = severityOfOptimizationState(state)
+    this.updates.push({ timestamp, state, severity })
+  }
+
+  get hashmap() {
+    return {
+        functionName: this._functionName
+      , file: this._file
+      , line: this._line
+      , column: this._column
+      , isScript: this._isScript
+      , updates: this.updates
+    }
+  }
+}
+
+module.exports = CodeEntry
+
+},{"./optimization-state":59}],56:[function(require,module,exports){
 'use strict'
 
 /* eslint-disable camelcase */
 
-const { nameOptimizationState, prefixesName } = require('./optimization-state')
 const { MIN_SEVERITY } = require('../severities')
 
 // <../examples/adders.js:93:27
@@ -29721,18 +29878,12 @@ function safeToInt(x) {
   return parseInt(x)
 }
 
-function disassembleSourcePosition(sourcePosition) {
-  const m = sourcePositionRx.exec(sourcePosition)
-  if (m == null) return { file: null, line: 0, column: 0 }
-  return { file: m[1], line: safeToInt(m[2]), column: safeToInt(m[3]) }
-}
-
 const SOFT = MIN_SEVERITY
 const LAZY = MIN_SEVERITY + 1
 const EAGER = MIN_SEVERITY + 2
 
-function severity(deoptReason) {
-  switch (deoptReason) {
+function getSeverity(bailoutType) {
+  switch (bailoutType) {
     case 'soft': return SOFT
     case 'lazy': return LAZY
     case 'eager': return EAGER
@@ -29746,57 +29897,61 @@ function unquote(s) {
 
 class DeoptEntry {
   constructor(
-      timestamp
-    , fnFile
-    , inliningId
-    , sourcePositionText
-    , bailoutType
-    , deoptReasonText
-    , state
+      fnFile
+    , file
+    , line
+    , column
   ) {
-    const inlined = inliningId !== -1
-    const { file, line, column } = disassembleSourcePosition(sourcePositionText)
-
     const parts = fnFile.split(' ')
-    const functionName = prefixesName(state) ? parts[0].slice(1) : parts[0]
-    const optimizationState = nameOptimizationState(state)
+    const functionName = parts[0]
 
-    this.timestamp = timestamp
     this.functionName = functionName
     this.file = file
     this.line = line
     this.column = column
-    this.inlined = inlined
-    this.bailoutType = unquote(bailoutType)
-    this.deoptReason = unquote(deoptReasonText)
-    this.optimizationState = optimizationState
-    this.severity = severity(this.bailoutType)
+
+    this.updates = []
+  }
+
+  addUpdate(timestamp, bailoutType, deoptReason, optimizationState, inliningId) {
+    bailoutType = unquote(bailoutType)
+    deoptReason = unquote(deoptReason)
+
+    const inlined = inliningId !== -1
+    const severity = getSeverity(bailoutType)
+
+    this.updates.push({
+        timestamp
+      , bailoutType
+      , deoptReason
+      , optimizationState
+      , inlined
+      , severity
+    })
   }
 
   get hashmap() {
     return {
-        timestamp         : this.timestamp
-      , functionName      : this.functionName
-      , file              : this.file
-      , line              : this.line
-      , column            : this.column
-      , inlined           : this.inlined
-      , bailoutType       : this.bailoutType
-      , deoptReason       : this.deoptReason
-      , optimizationState : this.optimizationState
-      , severity          : this.severity
+        functionName : this.functionName
+      , file         : this.file
+      , line         : this.line
+      , column       : this.column
+      , updates      : this.updates
     }
+  }
+
+  static disassembleSourcePosition(sourcePosition) {
+    const m = sourcePositionRx.exec(sourcePosition)
+    if (m == null) return { file: null, line: 0, column: 0 }
+    return { file: m[1], line: safeToInt(m[2]), column: safeToInt(m[3]) }
   }
 }
 
 module.exports = DeoptEntry
 
-},{"../severities":64,"./optimization-state":59}],57:[function(require,module,exports){
+},{"../severities":64}],57:[function(require,module,exports){
 'use strict'
 
-/* eslint-disable camelcase */
-
-const { nameOptimizationState, prefixesName } = require('./optimization-state')
 const {
     parseIcState
   , severityIcState
@@ -29807,11 +29962,6 @@ function normalizeFile(file) {
   return file.split(':')[0]
 }
 
-function isprefixed(s, state) {
-  if (!prefixesName(state)) return false
-  return s.startsWith('~') || s.startsWith('*')
-}
-
 function unquote(s) {
   // for some reason Node.js double quotes the file names
   return s.replace(/^"/, '').replace(/"$/, '')
@@ -29819,48 +29969,41 @@ function unquote(s) {
 
 class IcEntry {
   constructor(
-      type
-    , fnFile
+      fnFile
     , line
     , column
-    , key
-    , oldState
-    , newState
-    , map
-    , reason
-    , state
   ) {
-    this.type = type
-
     fnFile = unquote(fnFile)
     const parts = fnFile.split(' ')
-    const functionName = isprefixed(parts[0], state) ? parts[0].slice(1) : parts[0]
+    const functionName = parts[0]
     const file = normalizeFile(parts[1])
-    const optimizationState = nameOptimizationState(state)
 
     this.functionName = functionName
     this.file = file
     this.line = line
     this.column = column
-
-    this.oldState = parseIcState(oldState)
-    this.newState = parseIcState(newState)
-
-    this.key = key
-    this.map = map.toString(16)
-    this.reason = reason
-    this.optimizationState = optimizationState
-    this.severity = severityIcState(this.newState)
+    this.updates = []
   }
 
-  get category() {
-    if (this.type.indexOf('Store') !== -1) {
-      return 'Store'
-    } else if (this.type.indexOf('Load') !== -1) {
-      return 'Load'
-    } else {
-      return 'other'
-    }
+  addUpdate(type, oldState, newState, key, map, optimizationState) {
+    map = map.toString(16)
+    oldState = parseIcState(oldState)
+    newState = parseIcState(newState)
+    const severity = severityIcState(newState)
+
+    this.updates.push({
+        type
+      , oldState
+      , newState
+      , key
+      , map
+      , optimizationState
+      , severity
+    })
+  }
+
+  filterIcStateChanges() {
+    this.updates = this.updates.filter(x => x.oldState !== x.newState)
   }
 
   get hashmap() {
@@ -29869,20 +30012,14 @@ class IcEntry {
       , file         : this.file
       , line         : this.line
       , column       : this.column
-      , oldState     : this.oldState
-      , newState     : this.newState
-      , key          : this.key
-      , map          : this.map
-      , reason       : this.reason
-      , additional   : this.additional
-      , severity     : this.severity
+      , updates      : this.updates
     }
   }
 }
 
 module.exports = IcEntry
 
-},{"./ic-state":58,"./optimization-state":59}],58:[function(require,module,exports){
+},{"./ic-state":58}],58:[function(require,module,exports){
 'use strict'
 
 const { MIN_SEVERITY } = require('../severities')
@@ -29964,18 +30101,20 @@ function nameOptimizationState(state) {
   }
 }
 
-function prefixesName(state) {
+function severityOfOptimizationState(state) {
   switch (state) {
-    case Profile.CodeState.OPTIMIZABLE: return true
-    case Profile.CodeState.OPTIMIZED: return true
-    default: return false
+    case Profile.CodeState.COMPILED: return 3
+    case Profile.CodeState.OPTIMIZABLE: return 2
+    case Profile.CodeState.OPTIMIZED: return 1
+    case -1: return 3
+    default: throw new Error('unknown code state: ' + state)
   }
 }
 
 module.exports = {
     parseOptimizationState
   , nameOptimizationState
-  , prefixesName
+  , severityOfOptimizationState
 }
 
 },{"v8-tools-core/profile":78}],60:[function(require,module,exports){
@@ -29986,13 +30125,13 @@ const {
     severityColors
   , browserSeverityColors
   , MIN_SEVERITY
-  , highestSeverity
 } = require('../severities')
 const { unkeyLocation } = require('../grouping/location')
 const assert = require('assert')
 
 const DEOPTSYMBOL = '▼'
 const ICSYMBOL = '☎'
+const CODESYMBOL = '▲'
 
 function applyMark(codeLocation, markerLocation) {
   if (codeLocation.line > markerLocation.line) return true
@@ -30005,14 +30144,17 @@ class MarkerResolver {
   constructor({
       ics
     , deopts
+    , codes
     , icLocations
     , deoptLocations
-    , isterminal
+    , codeLocations
+  , isterminal
     , selectedLocation = null
     , includeAllSeverities = true
   }) {
     assert(ics == null || icLocations != null, 'need to provide locations for ics')
     assert(deopts == null || deoptLocations != null, 'need to provide locations for deopts')
+    assert(codes == null || codeLocations != null, 'need to provide locations for codes')
 
     this._ics = ics
     this._icLocations = icLocations
@@ -30022,44 +30164,75 @@ class MarkerResolver {
     this._deoptLocations = deoptLocations
     this._deoptLocationIdx = 0
 
+    this._codes = codes
+    this._codeLocations = codeLocations
+    this._codeLocationIdx = 0
+
     this._isterminal = isterminal
     this._selectedLocation = selectedLocation
     this._includeAllSeverities = includeAllSeverities
   }
 
   resolve(codeLocation) {
-    let s = ''
-    s += this._resolveDeopt(codeLocation)
-    s += this._resolveIc(codeLocation)
-    return s
+    let insertBefore = ''
+    let insertAfter = ''
+    {
+      const { before, after } = this._resolveDeopt(codeLocation)
+      insertBefore += before
+      insertAfter += after
+    }
+    {
+      const { before, after } = this._resolveIc(codeLocation)
+      insertBefore += before
+      insertAfter += after
+    }
+    {
+      const { before, after } = this._resolveCode(codeLocation)
+      insertBefore += before
+      insertAfter += after
+    }
+    return { insertBefore, insertAfter }
   }
 
   _resolveDeopt(codeLocation) {
     if (this._deopts == null) return ''
-    const { result, locationIdx } = this._resolve({
+    const { before, after, locationIdx } = this._resolve({
         codeLocation
       , map         : this._deopts
       , locationIdx : this._deoptLocationIdx
       , locations   : this._deoptLocations
     })
     this._deoptLocationIdx = locationIdx
-    return result
+    return { before, after }
   }
 
   _resolveIc(codeLocation) {
     if (this._ics == null) return ''
-    const { result, locationIdx } = this._resolve({
+    const { before, after, locationIdx } = this._resolve({
         codeLocation
       , map         : this._ics
       , locationIdx : this._icLocationIdx
       , locations   : this._icLocations
     })
     this._icLocationIdx = locationIdx
-    return result
+    return { before, after }
+  }
+
+  _resolveCode(loc) {
+    if (this._codes == null) return ''
+    const { before, after, locationIdx } = this._resolve({
+        codeLocation: loc
+      , map         : this._codes
+      , locationIdx : this._codeLocationIdx
+      , locations   : this._codeLocations
+    })
+    this._codeLocationIdx = locationIdx
+    return { before, after }
   }
 
   _resolve({ map, codeLocation, locationIdx, locations }) {
-    let result = ''
+    let before = ''
+    let after = ''
 
     let locationKey = locations[locationIdx]
     let currentLocation = unkeyLocation(locationKey)
@@ -30068,32 +30241,46 @@ class MarkerResolver {
       currentLocation != null &&
       applyMark(codeLocation, currentLocation)
     ) {
-      result += this._determineMarkerSymbol(map, locationKey)
+      const { result, placeBefore } = this._determineMarkerSymbol(map, locationKey)
+      if (placeBefore) before += result
+      else after += result
       locationIdx++
       locationKey = locations[locationIdx]
       currentLocation = unkeyLocation(locationKey)
     }
-    return { result, locationIdx }
+    return { before, after, locationIdx }
   }
 
   _determineMarkerSymbol(map, key) {
-    const isdeopt = map === this._deopts
+    const kind = (
+        map === this._deopts ?  'deopt'
+      : map === this._ics ? 'ic'
+      : 'code'
+    )
     if (map != null && map.has(key)) {
-      return this._handle(map.get(key), isdeopt)
+      return this._handle(map.get(key), kind)
     }
     return ''
   }
 
-  _handle(infos, isdeopt) {
-    const severity = highestSeverity(infos)
-    if (severity === MIN_SEVERITY && !this._includeAllSeverities) return ''
-    return this._isterminal
-      ? this._determineTerminalMarkerSymbol(infos, severity, isdeopt)
-      : this._determineBrowserMarkerSymbol(infos, severity, isdeopt)
+  _handle(info, kind) {
+    const severity = info.severity
+    if (severity === MIN_SEVERITY && !this._includeAllSeverities) return { result: '' }
+    const result = this._isterminal
+      ? this._determineTerminalMarkerSymbol(info, kind)
+      : this._determineBrowserMarkerSymbol(info, kind)
+
+    // anonymous Node.js function wrapper
+    const placeBefore = (info.isScript && info.line === 1 && info.column === 1)
+    return { result, placeBefore }
   }
 
-  _terminalSymbol(infos, severity, isdeopt) {
-    const symbol = isdeopt ? DEOPTSYMBOL : ICSYMBOL
+  _terminalSymbol(infos, severity, kind) {
+    const symbol = (
+        kind === 'deopt' ? DEOPTSYMBOL
+      : kind === 'ic' ? ICSYMBOL
+      : CODESYMBOL
+    )
     return severityColors[severity - 1](symbol)
   }
 
@@ -30101,24 +30288,29 @@ class MarkerResolver {
     return colors.brightBlack(`(${infos.id})`)
   }
 
-  _determineTerminalMarkerSymbol(infos, severity, isdeopt) {
+  // TODO: adapt or rip out
+  _determineTerminalMarkerSymbol(infos, severity, kind) {
     return (
-      this._terminalSymbol(infos, severity, isdeopt) +
+      this._terminalSymbol(infos, severity, kind) +
       this._terminalFootnote(infos)
     )
   }
 
-  _determineBrowserMarkerSymbol(infos, severity, isdeopt) {
-    const symbol = isdeopt ? DEOPTSYMBOL : ICSYMBOL
-    const color = browserSeverityColors[severity - 1]
+  _determineBrowserMarkerSymbol(info, kind) {
+    const symbol = (
+        kind === 'deopt' ? DEOPTSYMBOL
+      : kind === 'ic' ? ICSYMBOL
+      : CODESYMBOL
+    )
+    const color = browserSeverityColors[info.severity - 1]
     const className = (
-      this._selectedLocation === infos.id
+      this._selectedLocation === info.id
       ? `${color} selected`
       : color
     )
     return (
-      `<a href='#'id="code-location-${infos.id}" class="${className}"` +
-        ` data-markerid="${infos.id}">${symbol}</a>`
+      `<a href='#'id="code-location-${info.id}" class="${className}"` +
+        ` data-markerid="${info.id}">${symbol}</a>`
     )
   }
 }
@@ -30293,7 +30485,8 @@ class ThemeTerminal {
       const loc = token.loc.end
       if (loc == null) return colorized
 
-      return colorized + this._markerResolver.resolve(loc)
+      const { insertBefore, insertAfter } = this._markerResolver.resolve(loc)
+      return insertBefore + colorized + insertAfter
     }
     return mark.bind(this)
   }
@@ -30525,11 +30718,23 @@ function highestSeverity(infos) {
   )
 }
 
+function lowestSeverity(infos) {
+  return infos.reduce(
+      (lowest, ref) => {
+        var severity = ref.severity;
+
+        return severity < lowest ? severity : lowest;
+  }
+    , 99
+  )
+}
+
 module.exports = {
     severityColors
   , browserSeverityColors
   , MIN_SEVERITY
   , highestSeverity
+  , lowestSeverity
 }
 
 },{"ansicolors":66}],65:[function(require,module,exports){
