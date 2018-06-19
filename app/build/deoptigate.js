@@ -8058,7 +8058,7 @@ class MainView extends Component {
   }
 
   _onfileClicked(file) {
-    this.setState(Object.assign(this.state, { selectedFile: file }))
+    this.setState(Object.assign(this.state, { selectedFile: file, selectedLocation: null }))
   }
 }
 
@@ -29786,7 +29786,7 @@ function summarizeFile(ref) {
     // if there are lots of updates that means the function was optimized a lot
     // which could point to an issue
     if (updates.length > 3) { hs = Math.max(hs, 3) }
-    deoptSeverities[hs]++
+    codeSeverities[hs]++
     codeVector.severity = hs
     addLastCodeState(codeStates, updates)
   }

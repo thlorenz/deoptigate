@@ -116,7 +116,7 @@ class MainView extends Component {
   }
 
   _onfileClicked(file) {
-    this.setState(Object.assign(this.state, { selectedFile: file }))
+    this.setState(Object.assign(this.state, { selectedFile: file, selectedLocation: null }))
   }
 }
 
