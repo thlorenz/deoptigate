@@ -232,9 +232,12 @@ class DeoptProcessor extends LogReader {
   }
 
   filterIcStateChanges() {
-    for (const entry of this.entriesIC.values()) {
+    const emptyEntries = new Set()
+    for (const [ key, entry ] of this.entriesIC) {
       entry.filterIcStateChanges()
+      if (entry.updates.length === 0) emptyEntries.add(key)
     }
+    for (const key of emptyEntries) this.entriesIC.delete(key)
   }
 
   toObject() {
