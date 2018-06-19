@@ -12,10 +12,10 @@ return `
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width">
     <title>deoptigate</title>
-    <style type="text/css" media="screen">
+    <style async type="text/css" media="screen">
       ${mainCss}
     </style>
-    <script type="text/javascript" charset="utf-8">
+    <script async type="text/javascript" charset="utf-8">
       ${mainJs}
     </script>
     <script type="application/json" id="deoptigate-data" charset="utf-8">
