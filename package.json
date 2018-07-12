@@ -4,6 +4,7 @@
   "description": "Investigates v8/Node.js function deoptimizations.",
   "bin": "./bin/deoptigate",
   "main": "deoptigate.js",
+  "files": [ "app/", "bin/", "lib/", "deoptigate*" ],
   "repository": {
     "type": "git",
     "url": "git://github.com/thlorenz/deoptigate.git"

@@ -3,19 +3,15 @@
 Investigates v8/Node.js function deoptimizations.
 
 ```js
-// TODO
+node --trace-ic app.js
+deoptigate
 ```
 
-## Status
-
-Nix, Nada, Nichevo, Nothing --> go away!
+[![vector](assets/vector.png)](https://thlorenz.com/deoptigate/vector/)
 
 ## Installation
 
-    npm install deoptigate
-
-## [API](https://thlorenz.github.io/deoptigate)
-
+    npm install -g deoptigate
 
 ## License
 
