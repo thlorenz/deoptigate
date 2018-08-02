@@ -1,4 +1,2280 @@
 (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.deoptigateRender = f()}})(function(){var define,module,exports;return (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
+'use strict'
+
+const React = require('react')
+const { Component } = React
+const ReactDOM = require('react-dom')
+const assert = require('assert')
+const scrollIntoView = require('scroll-into-view-if-needed')
+const { highlight } = require('peacock')
+
+const Theme = require('../theme.browser')
+const MarkerResolver = require('../../lib/rendering/marker-resolver')
+
+class CodeView extends Component {
+  constructor(props) {
+    super()
+
+    const { onmarkerClicked } = props
+    assert.equal(typeof onmarkerClicked, 'function', 'need to pass onmarkerClicked function')
+    this._bind()
+  }
+
+  _bind() {
+    this._onmarkerClicked = this._onmarkerClicked.bind(this)
+  }
+
+  componentDidMount() {
+    const rootEl = ReactDOM.findDOMNode(this)
+    rootEl.addEventListener('click', event => {
+      const tgt = event.target
+      const { markerid } = tgt.dataset
+      if (markerid == null) { return }
+      event.preventDefault()
+      event.stopPropagation()
+      this._onmarkerClicked(parseInt(markerid))
+    })
+  }
+
+  componentDidUpdate() {
+    const { selectedLocation } = this.props
+    if (selectedLocation == null) { return }
+    const code = document.getElementById(`code-location-${selectedLocation}`)
+    if (code == null) { return }
+    scrollIntoView(code, { behavior: 'smooth', scrollMode: 'if-needed' })
+  }
+
+  render() {
+    const {
+        className = ''
+      , code
+      , ics
+      , deopts
+      , codes
+      , icLocations
+      , deoptLocations
+      , codeLocations
+      , selectedLocation
+      , includeAllSeverities
+    } = this.props
+
+    const markerResolver = new MarkerResolver({
+        deopts
+      , deoptLocations
+      , ics
+      , icLocations
+      , codes
+      , codeLocations
+      , selectedLocation
+      , includeAllSeverities
+    })
+
+    const theme = new Theme(markerResolver).theme
+    const highlightedCode = highlight(code, { theme, linenos: true })
+    return (
+      React.createElement( 'div', { className: className },
+        React.createElement( 'div', { dangerouslySetInnerHTML: {__html: highlightedCode} })
+      )
+    )
+  }
+
+  _onmarkerClicked(id) {
+    const { onmarkerClicked } = this.props
+    onmarkerClicked(id)
+  }
+}
+
+module.exports = {
+  CodeView
+}
+
+},{"../../lib/rendering/marker-resolver":59,"../theme.browser":49,"assert":6,"peacock":14,"react":39,"react-dom":19,"scroll-into-view-if-needed":47}],2:[function(require,module,exports){
+'use strict'
+
+const React = require('react')
+const { Component } = React
+const summarizeFile = require('../../lib/grouping/summarize-file')
+const assert = require('assert')
+
+const severityClassNames = [
+    'green i'
+  , 'blue'
+  , 'red b'
+]
+
+const underlineTdClass = ' bb b--silver pt2 pb2'
+
+function coloredTds(arr) {
+  return arr.map((x, idx) => {
+    const className = x > 0
+      ? severityClassNames[idx] + ' tr' + underlineTdClass
+      : 'silver i tr' + underlineTdClass
+    return React.createElement( 'td', { key: idx, className: className }, x)
+  })
+}
+
+function bySeverityScoreDesc(ref, ref$1) {
+  var s1 = ref.summary;
+  var s2 = ref$1.summary;
+
+  return s1.severityScore < s2.severityScore ? 1 : -1
+}
+
+class FilesView extends Component {
+  constructor(props) {
+    super(props)
+    const { onfileClicked } = props
+    assert.equal(typeof onfileClicked, 'function', 'need to pass onfileClicked function')
+  }
+
+  render() {
+    const { groups, includeAllSeverities, className = '' } = this.props
+    const tableHeader = this._renderTableHeader()
+    const rows = []
+    const filesSeverities = Array.from(groups)
+      .map((ref) => {
+        var file = ref[0];
+        var info = ref[1];
+
+        const { deopts, ics, codes } = info
+        const summary = summarizeFile({ ics, deopts, codes })
+        return { file, summary }
+      })
+      .filter((ref) => {
+        var summary = ref.summary;
+
+        return includeAllSeverities || summary.hasCriticalSeverities;
+    })
+      .sort(bySeverityScoreDesc)
+
+    for (const { file, summary } of filesSeverities) {
+      const { icSeverities, deoptSeverities, codeStates } = summary
+      const { relativePath } = groups.get(file)
+      const rendered = this._renderFile({
+          file
+        , relativePath
+        , icSeverities
+        , deoptSeverities
+        , codeStates
+      })
+      rows.push(rendered)
+    }
+    return (
+      React.createElement( 'div', { className: className },
+        React.createElement( 'table', { cellSpacing: '0' },
+          tableHeader,
+          React.createElement( 'tbody', null, rows )
+        )
+      )
+    )
+  }
+
+  _renderTableHeader() {
+    const topHeaderClass = 'bt br bl bw1 b--silver bg-light-green tc br1'
+    const subHeaderClass = 'bb br bl bw1 b--silver br1'
+    return (
+      React.createElement( 'thead', null,
+        React.createElement( 'tr', null,
+          React.createElement( 'td', { className: topHeaderClass + ' bb', rowSpan: '2' }, "File"),
+          React.createElement( 'td', { colSpan: '3', className: topHeaderClass }, "Optimizations"),
+          React.createElement( 'td', { colSpan: '3', className: topHeaderClass }, "Deoptimizations"),
+          React.createElement( 'td', { colSpan: '3', className: topHeaderClass }, "Inline Caches")
+        ),
+        React.createElement( 'tr', null,
+          React.createElement( 'td', { className: subHeaderClass }, "Optimized"),
+          React.createElement( 'td', { className: subHeaderClass }, "Optimizable"),
+          React.createElement( 'td', { className: subHeaderClass }, "Compiled"),
+          React.createElement( 'td', { className: subHeaderClass }, "Severity 1"),
+          React.createElement( 'td', { className: subHeaderClass }, "Severity 2"),
+          React.createElement( 'td', { className: subHeaderClass }, "Severity 3"),
+          React.createElement( 'td', { className: subHeaderClass }, "Severity 1"),
+          React.createElement( 'td', { className: subHeaderClass }, "Severity 2"),
+          React.createElement( 'td', { className: subHeaderClass }, "Severity 3")
+        )
+      )
+    )
+  }
+
+  _renderFile(ref) {
+    var file = ref.file;
+    var relativePath = ref.relativePath;
+    var deoptSeverities = ref.deoptSeverities;
+    var icSeverities = ref.icSeverities;
+    var codeStates = ref.codeStates;
+
+    const { selectedFile } = this.props
+
+    // Optimized = 3, Compile = 0, but we show them in order of serverity, so we reverse
+    const codeColumns = coloredTds(codeStates.reverse())
+    const deoptColumns = coloredTds(deoptSeverities.slice(1))
+    const icColumns = coloredTds(icSeverities.slice(1))
+
+    const onfileClicked = this._onfileClicked.bind(this, file)
+    const selectedClass = file === selectedFile ? 'bg-light-yellow' : ''
+    return (
+      React.createElement( 'tr', { key: relativePath, className: 'bb b--silver ' + selectedClass },
+        React.createElement( 'td', null,
+          React.createElement( 'a', { className: 'i silver' + underlineTdClass, href: '#', onClick: onfileClicked },
+            relativePath
+          )
+        ),
+        codeColumns,
+        deoptColumns,
+        icColumns
+      )
+    )
+  }
+
+  _onfileClicked(file) {
+    const { onfileClicked } = this.props
+    onfileClicked(file)
+  }
+}
+
+module.exports = { FilesView }
+
+},{"../../lib/grouping/summarize-file":53,"assert":6,"react":39}],3:[function(require,module,exports){
+'use strict'
+
+const React = require('react')
+const { Component } = React
+const scrollIntoView = require('scroll-into-view-if-needed')
+
+const assert = require('assert')
+const { nameIcState, severityIcState } = require('../../lib/log-processing/ic-state')
+const {
+    nameOptimizationState
+  , severityOfOptimizationState
+} = require('../../lib/log-processing/optimization-state')
+const { MIN_SEVERITY } = require('../../lib/severities')
+
+const severityClassNames = [
+    'green i'
+  , 'blue'
+  , 'red b'
+]
+
+class SummaryView extends Component {
+  constructor(props) {
+    super(props)
+    const { ics, icLocations, deopts, deoptLocations, onsummaryClicked } = props
+
+    assert(ics == null || icLocations != null, 'need to provide locations for ics')
+    assert(deopts == null || deoptLocations != null, 'need to provide locations for deopts')
+    assert.equal(typeof onsummaryClicked, 'function', 'need to pass onsummaryClicked function')
+
+    this._bind()
+  }
+
+  _bind() {
+    this._renderIc = this._renderIc.bind(this)
+    this._renderDeopt = this._renderDeopt.bind(this)
+    this._renderCode = this._renderCode.bind(this)
+  }
+
+  componentDidUpdate() {
+    const { selectedLocation } = this.props
+    if (selectedLocation == null) { return }
+    const summary = document.getElementById(`summary-location-${selectedLocation}`)
+    if (summary == null) { return }
+    scrollIntoView(summary, { behavior: 'smooth', scrollMode: 'if-needed' })
+  }
+
+  render() {
+    const {
+        className = ''
+      , ics
+      , icLocations
+      , deopts
+      , deoptLocations
+      , codes
+      , codeLocations
+    } = this.props
+    const renderedDeopts = this._renderDeopts(deopts, deoptLocations)
+    const renderedIcs = this._renderIcs(ics, icLocations)
+    const renderedCodes = this._renderCodes(codes, codeLocations)
+    return (
+      React.createElement( 'div', { className: className },
+        renderedCodes,
+        renderedDeopts,
+        renderedIcs
+      )
+    )
+  }
+
+  _renderDataPoint(data, locations, renderDetails) {
+    const { selectedLocation, includeAllSeverities, relativePath } = this.props
+    const rendered = []
+    for (const loc of locations) {
+      const info = data.get(loc)
+      if (!includeAllSeverities && info.severity <= MIN_SEVERITY) { continue }
+
+      const highlightedClass = selectedLocation === info.id ? 'bg-light-yellow' : 'bg-light-gray'
+      const className = `${highlightedClass} ba br2 bw1 ma3 pa2`
+      rendered.push(
+        React.createElement( 'div', { className: className, key: info.id },
+          this._summary(info, relativePath),
+          renderDetails(info)
+        )
+      )
+    }
+    return rendered
+  }
+
+  _renderIcs(ics, icLocations) {
+    if (ics == null) { return null }
+    const rendered = this._renderDataPoint(ics, icLocations, this._renderIc)
+    return (
+      React.createElement( 'div', { key: 'ics' },
+        React.createElement( 'h4', { className: 'underline' }, "Inline Caches"),
+        rendered
+      )
+    )
+  }
+
+  _renderDeopts(deopts, deoptLocations) {
+    if (deopts == null) { return null }
+    const rendered = this._renderDataPoint(deopts, deoptLocations, this._renderDeopt)
+    return (
+      React.createElement( 'div', { key: 'deopts' },
+        React.createElement( 'h4', { className: 'underline' }, "Deoptimizations"),
+        rendered
+      )
+    )
+  }
+
+  _renderCodes(codes, codeLocations, relativePath) {
+    if (codes == null) { return null }
+    const rendered = this._renderDataPoint(codes, codeLocations, this._renderCode)
+    return (
+      React.createElement( 'div', { key: 'optimizations' },
+        React.createElement( 'h4', { className: 'underline' }, "Optimizations"),
+        rendered
+      )
+    )
+  }
+
+  _summary(info, relativePath) {
+    const {
+        id
+      , functionName
+      , line
+      , column
+    } = info
+    const locationEl = React.createElement( 'span', { className: 'dark-blue f5 mr2' }, id)
+    const onclicked = e => {
+      e.preventDefault()
+      e.stopPropagation()
+      this._onsummaryClicked(id)
+    }
+
+    const fullLoc = (
+      React.createElement( 'a', { href: '#', className: 'i gray', onClick: onclicked },
+        functionName, " at ", relativePath, ":", line, ":", column
+      )
+    )
+    return (
+      React.createElement( 'div', { id: 'summary-location-' + id },
+        locationEl,
+        fullLoc
+      )
+    )
+  }
+
+  _renderDeopt(info) {
+    const rows = info.updates.map((update, idx) => this._deoptRow(update, idx))
+    return (
+      React.createElement( 'table', { key: 'deopt:' + info.id },
+        React.createElement( 'thead', { className: 'f5 b tc' },
+          React.createElement( 'tr', null,
+            React.createElement( 'td', null, "Timestamp" ),
+            React.createElement( 'td', null, "Bailout" ),
+            React.createElement( 'td', null, "Reason" ),
+            React.createElement( 'td', null, "Inlined" )
+          )
+        ),
+        React.createElement( 'tbody', null,
+          rows
+        )
+      )
+    )
+  }
+
+  _deoptRow(info) {
+    const {
+        inlined
+      , bailoutType
+      , deoptReason
+      , timestamp
+      , severity
+    } = info
+    const bailoutClassName = severityClassNames[severity - 1]
+    const timeStampMs = (timestamp / 1E3).toFixed()
+    return (
+      React.createElement( 'tr', { key: timestamp },
+        React.createElement( 'td', null, timeStampMs, "ms" ),
+        React.createElement( 'td', { className: bailoutClassName }, bailoutType),
+        React.createElement( 'td', { className: 'tr' }, deoptReason),
+        React.createElement( 'td', { className: 'gray tr' }, inlined ? 'yes' : 'no')
+      )
+    )
+  }
+
+  _renderIc(info) {
+    const rows = info.updates.map((update, idx) => this._icRow(update, idx))
+    return (
+      React.createElement( 'table', { key: 'ic:' + info.id },
+        React.createElement( 'thead', { className: 'f5 b tc' },
+          React.createElement( 'tr', null,
+            React.createElement( 'td', null, "Old State" ),
+            React.createElement( 'td', null, "New State" ),
+            React.createElement( 'td', null, "Key" ),
+            React.createElement( 'td', null, "Map" )
+          )
+        ),
+        React.createElement( 'tbody', null,
+          rows
+        )
+      )
+    )
+  }
+
+  _icRow(update, id) {
+    const {
+        oldState
+      , newState
+      , key
+      , map
+    } = update
+    const oldStateName = nameIcState(oldState)
+    const severityOldState = severityIcState(oldState)
+    const oldStateClassName = severityClassNames[severityOldState - 1]
+
+    const newStateName = nameIcState(newState)
+    const severityNewState = severityIcState(newState)
+    const newStateClassName = severityClassNames[severityNewState - 1]
+
+    const mapString = `0x${map}`
+    return (
+      React.createElement( 'tr', { key: key + id },
+        React.createElement( 'td', { className: oldStateClassName }, oldStateName),
+        React.createElement( 'td', { className: newStateClassName }, newStateName),
+        React.createElement( 'td', { className: 'black tl' }, key),
+        React.createElement( 'td', { className: 'gray tr' }, mapString)
+      )
+    )
+  }
+
+  _renderCode(info) {
+    const rows = info.updates.map((update, idx) => this._codeRow(update, idx))
+    return (
+      React.createElement( 'table', { key: 'code:' + info.id },
+        React.createElement( 'thead', { className: 'f5 b tc' },
+          React.createElement( 'tr', null,
+            React.createElement( 'td', null, "Timestamp" ),
+            React.createElement( 'td', null, "Optimization State" )
+          )
+        ),
+        React.createElement( 'tbody', null,
+          rows
+        )
+      )
+    )
+  }
+
+  _codeRow(info, id) {
+    const { timestamp, state } = info
+    const timeStampMs = (timestamp / 1E3).toFixed()
+    const codeState = nameOptimizationState(state)
+    const severity = severityOfOptimizationState(state)
+    const codeStateClassName = severityClassNames[severity - 1]
+
+    return (
+      React.createElement( 'tr', { key: timestamp },
+        React.createElement( 'td', null, timeStampMs, "ms" ),
+        React.createElement( 'td', { className: codeStateClassName }, codeState)
+      )
+    )
+  }
+
+  _onsummaryClicked(id) {
+    const { onsummaryClicked } = this.props
+    onsummaryClicked(id)
+  }
+}
+module.exports = {
+  SummaryView
+}
+
+},{"../../lib/log-processing/ic-state":57,"../../lib/log-processing/optimization-state":58,"../../lib/severities":60,"assert":6,"react":39,"scroll-into-view-if-needed":47}],4:[function(require,module,exports){
+'use strict'
+
+const React = require('react')
+const { Component } = React
+
+const assert = require('assert')
+
+class ToolbarView extends Component {
+  constructor(props) {
+    super(props)
+    const { onincludeAllSeveritiesChanged } = props
+    assert.equal(typeof onincludeAllSeveritiesChanged, 'function', 'need to pass onincludeAllSeveritiesChanged function')
+    this._bind()
+  }
+
+  _bind() {
+    this._onincludeAllSeveritiesToggled = this._onincludeAllSeveritiesToggled.bind(this)
+  }
+
+  render() {
+    const { className = '' } = this.props
+    const options = this._renderOptions()
+    return (
+      React.createElement( 'div', { className: className },
+        options
+      )
+    )
+  }
+
+  _renderOptions() {
+    const { includeAllSeverities } = this.props
+    return (
+      React.createElement( 'span', null, "Low Severities ", React.createElement( 'input', {
+          className: 'pointer', type: 'checkbox', defaultChecked: !!includeAllSeverities, onChange: this._onincludeAllSeveritiesToggled })
+      )
+    )
+  }
+
+  _onincludeAllSeveritiesToggled(e) {
+    const { onincludeAllSeveritiesChanged, includeAllSeverities } = this.props
+    onincludeAllSeveritiesChanged(!includeAllSeverities)
+  }
+}
+
+module.exports = {
+  ToolbarView
+}
+
+},{"assert":6,"react":39}],5:[function(require,module,exports){
+'use strict'
+
+const React = require('react')
+const { Component } = React
+const { render } = require('react-dom')
+const { deoptigate } = require('../')
+
+const { CodeView } = require('./components/code')
+const { SummaryView } = require('./components/summary')
+const { ToolbarView } = require('./components/toolbar')
+const { FilesView } = require('./components/files')
+
+function app() {
+  // makes React happy
+  document.body.innerHTML = ''
+  const el = document.createElement('div')
+  document.body.appendChild(el)
+  return el
+}
+
+class MainView extends Component {
+  constructor(props) {
+    super(props)
+    this.state = {
+        selectedFile: null
+      , selectedLocation: 2
+      , includeAllSeverities: false
+    }
+    this._bind()
+  }
+
+  _bind() {
+    this._onlocationSelected = this._onlocationSelected.bind(this)
+    this._onincludeAllSeveritiesChanged = this._onincludeAllSeveritiesChanged.bind(this)
+    this._onfileClicked = this._onfileClicked.bind(this)
+  }
+
+  render() {
+    const { groups } = this.props
+    const { selectedFile, includeAllSeverities } = this.state
+    const fileDetailsClassName = 'flex flex-row justify-center ma2'
+    const fileDetails = this._renderFileDetails(fileDetailsClassName)
+
+    return (
+      React.createElement( 'div', { className: 'flex-column center mw9 pa2' },
+        React.createElement( ToolbarView, {
+          className: 'flex flex-row justify-center', includeAllSeverities: includeAllSeverities, onincludeAllSeveritiesChanged: this._onincludeAllSeveritiesChanged }),
+        React.createElement( FilesView, {
+          className: 'flex flex-row justify-center vh-15 overflow-scroll', selectedFile: selectedFile, groups: groups, includeAllSeverities: includeAllSeverities, onfileClicked: this._onfileClicked }),
+        fileDetails
+      )
+    )
+  }
+
+  _renderFileDetails(className) {
+    const { groups } = this.props
+    const { selectedFile, selectedLocation, includeAllSeverities } = this.state
+    if (selectedFile == null || !groups.has(selectedFile)) {
+      return (
+        React.createElement( 'div', { className: className }, "Please selecte a file in the above table")
+      )
+    }
+    const {
+        ics
+      , icLocations
+      , deopts
+      , deoptLocations
+      , codes
+      , codeLocations
+      , src
+      , relativePath
+    } = groups.get(selectedFile)
+    return (
+      React.createElement( 'div', { className: className },
+        React.createElement( CodeView, {
+          className: 'flex-column vh-85 w-50 overflow-scroll code-view', selectedLocation: selectedLocation, code: src, ics: ics, icLocations: icLocations, deopts: deopts, deoptLocations: deoptLocations, codes: codes, codeLocations: codeLocations, includeAllSeverities: includeAllSeverities, onmarkerClicked: this._onlocationSelected }),
+        React.createElement( SummaryView, {
+          className: 'flex-column vh-85 w-50 overflow-scroll', file: selectedFile, relativePath: relativePath, selectedLocation: selectedLocation, ics: ics, icLocations: icLocations, deopts: deopts, deoptLocations: deoptLocations, codes: codes, codeLocations: codeLocations, includeAllSeverities: includeAllSeverities, onsummaryClicked: this._onlocationSelected })
+      )
+    )
+  }
+
+  _onlocationSelected(id) {
+    this.setState(Object.assign(this.state, { selectedLocation: id }))
+  }
+
+  _onincludeAllSeveritiesChanged(includeAllSeverities) {
+    this.setState(Object.assign(this.state, { includeAllSeverities, selectedLocation: null }))
+  }
+
+  _onfileClicked(file) {
+    this.setState(Object.assign(this.state, { selectedFile: file, selectedLocation: null }))
+  }
+}
+
+async function deoptigateRender(groupedByFile) {
+  try {
+    const groupedByFileAndLocation = deoptigate(groupedByFile)
+
+    render(
+      React.createElement( MainView, { groups: groupedByFileAndLocation })
+    , app()
+    )
+  } catch (err) {
+    console.error(err)
+  }
+}
+
+module.exports = deoptigateRender
+
+},{"../":50,"./components/code":1,"./components/files":2,"./components/summary":3,"./components/toolbar":4,"react":39,"react-dom":19}],6:[function(require,module,exports){
+(function (global){
+'use strict';
+
+// compare and isBuffer taken from https://github.com/feross/buffer/blob/680e9e5e488f22aac27599a57dc844a6315928dd/index.js
+// original notice:
+
+/*!
+ * The buffer module from node.js, for the browser.
+ *
+ * @author   Feross Aboukhadijeh <feross@feross.org> <http://feross.org>
+ * @license  MIT
+ */
+function compare(a, b) {
+  if (a === b) {
+    return 0;
+  }
+
+  var x = a.length;
+  var y = b.length;
+
+  for (var i = 0, len = Math.min(x, y); i < len; ++i) {
+    if (a[i] !== b[i]) {
+      x = a[i];
+      y = b[i];
+      break;
+    }
+  }
+
+  if (x < y) {
+    return -1;
+  }
+  if (y < x) {
+    return 1;
+  }
+  return 0;
+}
+function isBuffer(b) {
+  if (global.Buffer && typeof global.Buffer.isBuffer === 'function') {
+    return global.Buffer.isBuffer(b);
+  }
+  return !!(b != null && b._isBuffer);
+}
+
+// based on node assert, original notice:
+
+// http://wiki.commonjs.org/wiki/Unit_Testing/1.0
+//
+// THIS IS NOT TESTED NOR LIKELY TO WORK OUTSIDE V8!
+//
+// Originally from narwhal.js (http://narwhaljs.org)
+// Copyright (c) 2009 Thomas Robinson <280north.com>
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the 'Software'), to
+// deal in the Software without restriction, including without limitation the
+// rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+// sell copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+// ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+// WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+var util = require('util/');
+var hasOwn = Object.prototype.hasOwnProperty;
+var pSlice = Array.prototype.slice;
+var functionsHaveNames = (function () {
+  return function foo() {}.name === 'foo';
+}());
+function pToString (obj) {
+  return Object.prototype.toString.call(obj);
+}
+function isView(arrbuf) {
+  if (isBuffer(arrbuf)) {
+    return false;
+  }
+  if (typeof global.ArrayBuffer !== 'function') {
+    return false;
+  }
+  if (typeof ArrayBuffer.isView === 'function') {
+    return ArrayBuffer.isView(arrbuf);
+  }
+  if (!arrbuf) {
+    return false;
+  }
+  if (arrbuf instanceof DataView) {
+    return true;
+  }
+  if (arrbuf.buffer && arrbuf.buffer instanceof ArrayBuffer) {
+    return true;
+  }
+  return false;
+}
+// 1. The assert module provides functions that throw
+// AssertionError's when particular conditions are not met. The
+// assert module must conform to the following interface.
+
+var assert = module.exports = ok;
+
+// 2. The AssertionError is defined in assert.
+// new assert.AssertionError({ message: message,
+//                             actual: actual,
+//                             expected: expected })
+
+var regex = /\s*function\s+([^\(\s]*)\s*/;
+// based on https://github.com/ljharb/function.prototype.name/blob/adeeeec8bfcc6068b187d7d9fb3d5bb1d3a30899/implementation.js
+function getName(func) {
+  if (!util.isFunction(func)) {
+    return;
+  }
+  if (functionsHaveNames) {
+    return func.name;
+  }
+  var str = func.toString();
+  var match = str.match(regex);
+  return match && match[1];
+}
+assert.AssertionError = function AssertionError(options) {
+  this.name = 'AssertionError';
+  this.actual = options.actual;
+  this.expected = options.expected;
+  this.operator = options.operator;
+  if (options.message) {
+    this.message = options.message;
+    this.generatedMessage = false;
+  } else {
+    this.message = getMessage(this);
+    this.generatedMessage = true;
+  }
+  var stackStartFunction = options.stackStartFunction || fail;
+  if (Error.captureStackTrace) {
+    Error.captureStackTrace(this, stackStartFunction);
+  } else {
+    // non v8 browsers so we can have a stacktrace
+    var err = new Error();
+    if (err.stack) {
+      var out = err.stack;
+
+      // try to strip useless frames
+      var fn_name = getName(stackStartFunction);
+      var idx = out.indexOf('\n' + fn_name);
+      if (idx >= 0) {
+        // once we have located the function frame
+        // we need to strip out everything before it (and its line)
+        var next_line = out.indexOf('\n', idx + 1);
+        out = out.substring(next_line + 1);
+      }
+
+      this.stack = out;
+    }
+  }
+};
+
+// assert.AssertionError instanceof Error
+util.inherits(assert.AssertionError, Error);
+
+function truncate(s, n) {
+  if (typeof s === 'string') {
+    return s.length < n ? s : s.slice(0, n);
+  } else {
+    return s;
+  }
+}
+function inspect(something) {
+  if (functionsHaveNames || !util.isFunction(something)) {
+    return util.inspect(something);
+  }
+  var rawname = getName(something);
+  var name = rawname ? ': ' + rawname : '';
+  return '[Function' +  name + ']';
+}
+function getMessage(self) {
+  return truncate(inspect(self.actual), 128) + ' ' +
+         self.operator + ' ' +
+         truncate(inspect(self.expected), 128);
+}
+
+// At present only the three keys mentioned above are used and
+// understood by the spec. Implementations or sub modules can pass
+// other keys to the AssertionError's constructor - they will be
+// ignored.
+
+// 3. All of the following functions must throw an AssertionError
+// when a corresponding condition is not met, with a message that
+// may be undefined if not provided.  All assertion methods provide
+// both the actual and expected values to the assertion error for
+// display purposes.
+
+function fail(actual, expected, message, operator, stackStartFunction) {
+  throw new assert.AssertionError({
+    message: message,
+    actual: actual,
+    expected: expected,
+    operator: operator,
+    stackStartFunction: stackStartFunction
+  });
+}
+
+// EXTENSION! allows for well behaved errors defined elsewhere.
+assert.fail = fail;
+
+// 4. Pure assertion tests whether a value is truthy, as determined
+// by !!guard.
+// assert.ok(guard, message_opt);
+// This statement is equivalent to assert.equal(true, !!guard,
+// message_opt);. To test strictly for the value true, use
+// assert.strictEqual(true, guard, message_opt);.
+
+function ok(value, message) {
+  if (!value) fail(value, true, message, '==', assert.ok);
+}
+assert.ok = ok;
+
+// 5. The equality assertion tests shallow, coercive equality with
+// ==.
+// assert.equal(actual, expected, message_opt);
+
+assert.equal = function equal(actual, expected, message) {
+  if (actual != expected) fail(actual, expected, message, '==', assert.equal);
+};
+
+// 6. The non-equality assertion tests for whether two objects are not equal
+// with != assert.notEqual(actual, expected, message_opt);
+
+assert.notEqual = function notEqual(actual, expected, message) {
+  if (actual == expected) {
+    fail(actual, expected, message, '!=', assert.notEqual);
+  }
+};
+
+// 7. The equivalence assertion tests a deep equality relation.
+// assert.deepEqual(actual, expected, message_opt);
+
+assert.deepEqual = function deepEqual(actual, expected, message) {
+  if (!_deepEqual(actual, expected, false)) {
+    fail(actual, expected, message, 'deepEqual', assert.deepEqual);
+  }
+};
+
+assert.deepStrictEqual = function deepStrictEqual(actual, expected, message) {
+  if (!_deepEqual(actual, expected, true)) {
+    fail(actual, expected, message, 'deepStrictEqual', assert.deepStrictEqual);
+  }
+};
+
+function _deepEqual(actual, expected, strict, memos) {
+  // 7.1. All identical values are equivalent, as determined by ===.
+  if (actual === expected) {
+    return true;
+  } else if (isBuffer(actual) && isBuffer(expected)) {
+    return compare(actual, expected) === 0;
+
+  // 7.2. If the expected value is a Date object, the actual value is
+  // equivalent if it is also a Date object that refers to the same time.
+  } else if (util.isDate(actual) && util.isDate(expected)) {
+    return actual.getTime() === expected.getTime();
+
+  // 7.3 If the expected value is a RegExp object, the actual value is
+  // equivalent if it is also a RegExp object with the same source and
+  // properties (`global`, `multiline`, `lastIndex`, `ignoreCase`).
+  } else if (util.isRegExp(actual) && util.isRegExp(expected)) {
+    return actual.source === expected.source &&
+           actual.global === expected.global &&
+           actual.multiline === expected.multiline &&
+           actual.lastIndex === expected.lastIndex &&
+           actual.ignoreCase === expected.ignoreCase;
+
+  // 7.4. Other pairs that do not both pass typeof value == 'object',
+  // equivalence is determined by ==.
+  } else if ((actual === null || typeof actual !== 'object') &&
+             (expected === null || typeof expected !== 'object')) {
+    return strict ? actual === expected : actual == expected;
+
+  // If both values are instances of typed arrays, wrap their underlying
+  // ArrayBuffers in a Buffer each to increase performance
+  // This optimization requires the arrays to have the same type as checked by
+  // Object.prototype.toString (aka pToString). Never perform binary
+  // comparisons for Float*Arrays, though, since e.g. +0 === -0 but their
+  // bit patterns are not identical.
+  } else if (isView(actual) && isView(expected) &&
+             pToString(actual) === pToString(expected) &&
+             !(actual instanceof Float32Array ||
+               actual instanceof Float64Array)) {
+    return compare(new Uint8Array(actual.buffer),
+                   new Uint8Array(expected.buffer)) === 0;
+
+  // 7.5 For all other Object pairs, including Array objects, equivalence is
+  // determined by having the same number of owned properties (as verified
+  // with Object.prototype.hasOwnProperty.call), the same set of keys
+  // (although not necessarily the same order), equivalent values for every
+  // corresponding key, and an identical 'prototype' property. Note: this
+  // accounts for both named and indexed properties on Arrays.
+  } else if (isBuffer(actual) !== isBuffer(expected)) {
+    return false;
+  } else {
+    memos = memos || {actual: [], expected: []};
+
+    var actualIndex = memos.actual.indexOf(actual);
+    if (actualIndex !== -1) {
+      if (actualIndex === memos.expected.indexOf(expected)) {
+        return true;
+      }
+    }
+
+    memos.actual.push(actual);
+    memos.expected.push(expected);
+
+    return objEquiv(actual, expected, strict, memos);
+  }
+}
+
+function isArguments(object) {
+  return Object.prototype.toString.call(object) == '[object Arguments]';
+}
+
+function objEquiv(a, b, strict, actualVisitedObjects) {
+  if (a === null || a === undefined || b === null || b === undefined)
+    return false;
+  // if one is a primitive, the other must be same
+  if (util.isPrimitive(a) || util.isPrimitive(b))
+    return a === b;
+  if (strict && Object.getPrototypeOf(a) !== Object.getPrototypeOf(b))
+    return false;
+  var aIsArgs = isArguments(a);
+  var bIsArgs = isArguments(b);
+  if ((aIsArgs && !bIsArgs) || (!aIsArgs && bIsArgs))
+    return false;
+  if (aIsArgs) {
+    a = pSlice.call(a);
+    b = pSlice.call(b);
+    return _deepEqual(a, b, strict);
+  }
+  var ka = objectKeys(a);
+  var kb = objectKeys(b);
+  var key, i;
+  // having the same number of owned properties (keys incorporates
+  // hasOwnProperty)
+  if (ka.length !== kb.length)
+    return false;
+  //the same set of keys (although not necessarily the same order),
+  ka.sort();
+  kb.sort();
+  //~~~cheap key test
+  for (i = ka.length - 1; i >= 0; i--) {
+    if (ka[i] !== kb[i])
+      return false;
+  }
+  //equivalent values for every corresponding key, and
+  //~~~possibly expensive deep test
+  for (i = ka.length - 1; i >= 0; i--) {
+    key = ka[i];
+    if (!_deepEqual(a[key], b[key], strict, actualVisitedObjects))
+      return false;
+  }
+  return true;
+}
+
+// 8. The non-equivalence assertion tests for any deep inequality.
+// assert.notDeepEqual(actual, expected, message_opt);
+
+assert.notDeepEqual = function notDeepEqual(actual, expected, message) {
+  if (_deepEqual(actual, expected, false)) {
+    fail(actual, expected, message, 'notDeepEqual', assert.notDeepEqual);
+  }
+};
+
+assert.notDeepStrictEqual = notDeepStrictEqual;
+function notDeepStrictEqual(actual, expected, message) {
+  if (_deepEqual(actual, expected, true)) {
+    fail(actual, expected, message, 'notDeepStrictEqual', notDeepStrictEqual);
+  }
+}
+
+
+// 9. The strict equality assertion tests strict equality, as determined by ===.
+// assert.strictEqual(actual, expected, message_opt);
+
+assert.strictEqual = function strictEqual(actual, expected, message) {
+  if (actual !== expected) {
+    fail(actual, expected, message, '===', assert.strictEqual);
+  }
+};
+
+// 10. The strict non-equality assertion tests for strict inequality, as
+// determined by !==.  assert.notStrictEqual(actual, expected, message_opt);
+
+assert.notStrictEqual = function notStrictEqual(actual, expected, message) {
+  if (actual === expected) {
+    fail(actual, expected, message, '!==', assert.notStrictEqual);
+  }
+};
+
+function expectedException(actual, expected) {
+  if (!actual || !expected) {
+    return false;
+  }
+
+  if (Object.prototype.toString.call(expected) == '[object RegExp]') {
+    return expected.test(actual);
+  }
+
+  try {
+    if (actual instanceof expected) {
+      return true;
+    }
+  } catch (e) {
+    // Ignore.  The instanceof check doesn't work for arrow functions.
+  }
+
+  if (Error.isPrototypeOf(expected)) {
+    return false;
+  }
+
+  return expected.call({}, actual) === true;
+}
+
+function _tryBlock(block) {
+  var error;
+  try {
+    block();
+  } catch (e) {
+    error = e;
+  }
+  return error;
+}
+
+function _throws(shouldThrow, block, expected, message) {
+  var actual;
+
+  if (typeof block !== 'function') {
+    throw new TypeError('"block" argument must be a function');
+  }
+
+  if (typeof expected === 'string') {
+    message = expected;
+    expected = null;
+  }
+
+  actual = _tryBlock(block);
+
+  message = (expected && expected.name ? ' (' + expected.name + ').' : '.') +
+            (message ? ' ' + message : '.');
+
+  if (shouldThrow && !actual) {
+    fail(actual, expected, 'Missing expected exception' + message);
+  }
+
+  var userProvidedMessage = typeof message === 'string';
+  var isUnwantedException = !shouldThrow && util.isError(actual);
+  var isUnexpectedException = !shouldThrow && actual && !expected;
+
+  if ((isUnwantedException &&
+      userProvidedMessage &&
+      expectedException(actual, expected)) ||
+      isUnexpectedException) {
+    fail(actual, expected, 'Got unwanted exception' + message);
+  }
+
+  if ((shouldThrow && actual && expected &&
+      !expectedException(actual, expected)) || (!shouldThrow && actual)) {
+    throw actual;
+  }
+}
+
+// 11. Expected to throw an error:
+// assert.throws(block, Error_opt, message_opt);
+
+assert.throws = function(block, /*optional*/error, /*optional*/message) {
+  _throws(true, block, error, message);
+};
+
+// EXTENSION! This is annoying to write outside this module.
+assert.doesNotThrow = function(block, /*optional*/error, /*optional*/message) {
+  _throws(false, block, error, message);
+};
+
+assert.ifError = function(err) { if (err) throw err; };
+
+var objectKeys = Object.keys || function (obj) {
+  var keys = [];
+  for (var key in obj) {
+    if (hasOwn.call(obj, key)) keys.push(key);
+  }
+  return keys;
+};
+
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"util/":9}],7:[function(require,module,exports){
+if (typeof Object.create === 'function') {
+  // implementation from standard node.js 'util' module
+  module.exports = function inherits(ctor, superCtor) {
+    ctor.super_ = superCtor
+    ctor.prototype = Object.create(superCtor.prototype, {
+      constructor: {
+        value: ctor,
+        enumerable: false,
+        writable: true,
+        configurable: true
+      }
+    });
+  };
+} else {
+  // old school shim for old browsers
+  module.exports = function inherits(ctor, superCtor) {
+    ctor.super_ = superCtor
+    var TempCtor = function () {}
+    TempCtor.prototype = superCtor.prototype
+    ctor.prototype = new TempCtor()
+    ctor.prototype.constructor = ctor
+  }
+}
+
+},{}],8:[function(require,module,exports){
+module.exports = function isBuffer(arg) {
+  return arg && typeof arg === 'object'
+    && typeof arg.copy === 'function'
+    && typeof arg.fill === 'function'
+    && typeof arg.readUInt8 === 'function';
+}
+},{}],9:[function(require,module,exports){
+(function (process,global){
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+var formatRegExp = /%[sdj%]/g;
+exports.format = function(f) {
+  if (!isString(f)) {
+    var objects = [];
+    for (var i = 0; i < arguments.length; i++) {
+      objects.push(inspect(arguments[i]));
+    }
+    return objects.join(' ');
+  }
+
+  var i = 1;
+  var args = arguments;
+  var len = args.length;
+  var str = String(f).replace(formatRegExp, function(x) {
+    if (x === '%%') return '%';
+    if (i >= len) return x;
+    switch (x) {
+      case '%s': return String(args[i++]);
+      case '%d': return Number(args[i++]);
+      case '%j':
+        try {
+          return JSON.stringify(args[i++]);
+        } catch (_) {
+          return '[Circular]';
+        }
+      default:
+        return x;
+    }
+  });
+  for (var x = args[i]; i < len; x = args[++i]) {
+    if (isNull(x) || !isObject(x)) {
+      str += ' ' + x;
+    } else {
+      str += ' ' + inspect(x);
+    }
+  }
+  return str;
+};
+
+
+// Mark that a method should not be used.
+// Returns a modified function which warns once by default.
+// If --no-deprecation is set, then it is a no-op.
+exports.deprecate = function(fn, msg) {
+  // Allow for deprecating things in the process of starting up.
+  if (isUndefined(global.process)) {
+    return function() {
+      return exports.deprecate(fn, msg).apply(this, arguments);
+    };
+  }
+
+  if (process.noDeprecation === true) {
+    return fn;
+  }
+
+  var warned = false;
+  function deprecated() {
+    if (!warned) {
+      if (process.throwDeprecation) {
+        throw new Error(msg);
+      } else if (process.traceDeprecation) {
+        console.trace(msg);
+      } else {
+        console.error(msg);
+      }
+      warned = true;
+    }
+    return fn.apply(this, arguments);
+  }
+
+  return deprecated;
+};
+
+
+var debugs = {};
+var debugEnviron;
+exports.debuglog = function(set) {
+  if (isUndefined(debugEnviron))
+    debugEnviron = process.env.NODE_DEBUG || '';
+  set = set.toUpperCase();
+  if (!debugs[set]) {
+    if (new RegExp('\\b' + set + '\\b', 'i').test(debugEnviron)) {
+      var pid = process.pid;
+      debugs[set] = function() {
+        var msg = exports.format.apply(exports, arguments);
+        console.error('%s %d: %s', set, pid, msg);
+      };
+    } else {
+      debugs[set] = function() {};
+    }
+  }
+  return debugs[set];
+};
+
+
+/**
+ * Echos the value of a value. Trys to print the value out
+ * in the best way possible given the different types.
+ *
+ * @param {Object} obj The object to print out.
+ * @param {Object} opts Optional options object that alters the output.
+ */
+/* legacy: obj, showHidden, depth, colors*/
+function inspect(obj, opts) {
+  // default options
+  var ctx = {
+    seen: [],
+    stylize: stylizeNoColor
+  };
+  // legacy...
+  if (arguments.length >= 3) ctx.depth = arguments[2];
+  if (arguments.length >= 4) ctx.colors = arguments[3];
+  if (isBoolean(opts)) {
+    // legacy...
+    ctx.showHidden = opts;
+  } else if (opts) {
+    // got an "options" object
+    exports._extend(ctx, opts);
+  }
+  // set default options
+  if (isUndefined(ctx.showHidden)) ctx.showHidden = false;
+  if (isUndefined(ctx.depth)) ctx.depth = 2;
+  if (isUndefined(ctx.colors)) ctx.colors = false;
+  if (isUndefined(ctx.customInspect)) ctx.customInspect = true;
+  if (ctx.colors) ctx.stylize = stylizeWithColor;
+  return formatValue(ctx, obj, ctx.depth);
+}
+exports.inspect = inspect;
+
+
+// http://en.wikipedia.org/wiki/ANSI_escape_code#graphics
+inspect.colors = {
+  'bold' : [1, 22],
+  'italic' : [3, 23],
+  'underline' : [4, 24],
+  'inverse' : [7, 27],
+  'white' : [37, 39],
+  'grey' : [90, 39],
+  'black' : [30, 39],
+  'blue' : [34, 39],
+  'cyan' : [36, 39],
+  'green' : [32, 39],
+  'magenta' : [35, 39],
+  'red' : [31, 39],
+  'yellow' : [33, 39]
+};
+
+// Don't use 'blue' not visible on cmd.exe
+inspect.styles = {
+  'special': 'cyan',
+  'number': 'yellow',
+  'boolean': 'yellow',
+  'undefined': 'grey',
+  'null': 'bold',
+  'string': 'green',
+  'date': 'magenta',
+  // "name": intentionally not styling
+  'regexp': 'red'
+};
+
+
+function stylizeWithColor(str, styleType) {
+  var style = inspect.styles[styleType];
+
+  if (style) {
+    return '\u001b[' + inspect.colors[style][0] + 'm' + str +
+           '\u001b[' + inspect.colors[style][1] + 'm';
+  } else {
+    return str;
+  }
+}
+
+
+function stylizeNoColor(str, styleType) {
+  return str;
+}
+
+
+function arrayToHash(array) {
+  var hash = {};
+
+  array.forEach(function(val, idx) {
+    hash[val] = true;
+  });
+
+  return hash;
+}
+
+
+function formatValue(ctx, value, recurseTimes) {
+  // Provide a hook for user-specified inspect functions.
+  // Check that value is an object with an inspect function on it
+  if (ctx.customInspect &&
+      value &&
+      isFunction(value.inspect) &&
+      // Filter out the util module, it's inspect function is special
+      value.inspect !== exports.inspect &&
+      // Also filter out any prototype objects using the circular check.
+      !(value.constructor && value.constructor.prototype === value)) {
+    var ret = value.inspect(recurseTimes, ctx);
+    if (!isString(ret)) {
+      ret = formatValue(ctx, ret, recurseTimes);
+    }
+    return ret;
+  }
+
+  // Primitive types cannot have properties
+  var primitive = formatPrimitive(ctx, value);
+  if (primitive) {
+    return primitive;
+  }
+
+  // Look up the keys of the object.
+  var keys = Object.keys(value);
+  var visibleKeys = arrayToHash(keys);
+
+  if (ctx.showHidden) {
+    keys = Object.getOwnPropertyNames(value);
+  }
+
+  // IE doesn't make error fields non-enumerable
+  // http://msdn.microsoft.com/en-us/library/ie/dww52sbt(v=vs.94).aspx
+  if (isError(value)
+      && (keys.indexOf('message') >= 0 || keys.indexOf('description') >= 0)) {
+    return formatError(value);
+  }
+
+  // Some type of object without properties can be shortcutted.
+  if (keys.length === 0) {
+    if (isFunction(value)) {
+      var name = value.name ? ': ' + value.name : '';
+      return ctx.stylize('[Function' + name + ']', 'special');
+    }
+    if (isRegExp(value)) {
+      return ctx.stylize(RegExp.prototype.toString.call(value), 'regexp');
+    }
+    if (isDate(value)) {
+      return ctx.stylize(Date.prototype.toString.call(value), 'date');
+    }
+    if (isError(value)) {
+      return formatError(value);
+    }
+  }
+
+  var base = '', array = false, braces = ['{', '}'];
+
+  // Make Array say that they are Array
+  if (isArray(value)) {
+    array = true;
+    braces = ['[', ']'];
+  }
+
+  // Make functions say that they are functions
+  if (isFunction(value)) {
+    var n = value.name ? ': ' + value.name : '';
+    base = ' [Function' + n + ']';
+  }
+
+  // Make RegExps say that they are RegExps
+  if (isRegExp(value)) {
+    base = ' ' + RegExp.prototype.toString.call(value);
+  }
+
+  // Make dates with properties first say the date
+  if (isDate(value)) {
+    base = ' ' + Date.prototype.toUTCString.call(value);
+  }
+
+  // Make error with message first say the error
+  if (isError(value)) {
+    base = ' ' + formatError(value);
+  }
+
+  if (keys.length === 0 && (!array || value.length == 0)) {
+    return braces[0] + base + braces[1];
+  }
+
+  if (recurseTimes < 0) {
+    if (isRegExp(value)) {
+      return ctx.stylize(RegExp.prototype.toString.call(value), 'regexp');
+    } else {
+      return ctx.stylize('[Object]', 'special');
+    }
+  }
+
+  ctx.seen.push(value);
+
+  var output;
+  if (array) {
+    output = formatArray(ctx, value, recurseTimes, visibleKeys, keys);
+  } else {
+    output = keys.map(function(key) {
+      return formatProperty(ctx, value, recurseTimes, visibleKeys, key, array);
+    });
+  }
+
+  ctx.seen.pop();
+
+  return reduceToSingleString(output, base, braces);
+}
+
+
+function formatPrimitive(ctx, value) {
+  if (isUndefined(value))
+    return ctx.stylize('undefined', 'undefined');
+  if (isString(value)) {
+    var simple = '\'' + JSON.stringify(value).replace(/^"|"$/g, '')
+                                             .replace(/'/g, "\\'")
+                                             .replace(/\\"/g, '"') + '\'';
+    return ctx.stylize(simple, 'string');
+  }
+  if (isNumber(value))
+    return ctx.stylize('' + value, 'number');
+  if (isBoolean(value))
+    return ctx.stylize('' + value, 'boolean');
+  // For some reason typeof null is "object", so special case here.
+  if (isNull(value))
+    return ctx.stylize('null', 'null');
+}
+
+
+function formatError(value) {
+  return '[' + Error.prototype.toString.call(value) + ']';
+}
+
+
+function formatArray(ctx, value, recurseTimes, visibleKeys, keys) {
+  var output = [];
+  for (var i = 0, l = value.length; i < l; ++i) {
+    if (hasOwnProperty(value, String(i))) {
+      output.push(formatProperty(ctx, value, recurseTimes, visibleKeys,
+          String(i), true));
+    } else {
+      output.push('');
+    }
+  }
+  keys.forEach(function(key) {
+    if (!key.match(/^\d+$/)) {
+      output.push(formatProperty(ctx, value, recurseTimes, visibleKeys,
+          key, true));
+    }
+  });
+  return output;
+}
+
+
+function formatProperty(ctx, value, recurseTimes, visibleKeys, key, array) {
+  var name, str, desc;
+  desc = Object.getOwnPropertyDescriptor(value, key) || { value: value[key] };
+  if (desc.get) {
+    if (desc.set) {
+      str = ctx.stylize('[Getter/Setter]', 'special');
+    } else {
+      str = ctx.stylize('[Getter]', 'special');
+    }
+  } else {
+    if (desc.set) {
+      str = ctx.stylize('[Setter]', 'special');
+    }
+  }
+  if (!hasOwnProperty(visibleKeys, key)) {
+    name = '[' + key + ']';
+  }
+  if (!str) {
+    if (ctx.seen.indexOf(desc.value) < 0) {
+      if (isNull(recurseTimes)) {
+        str = formatValue(ctx, desc.value, null);
+      } else {
+        str = formatValue(ctx, desc.value, recurseTimes - 1);
+      }
+      if (str.indexOf('\n') > -1) {
+        if (array) {
+          str = str.split('\n').map(function(line) {
+            return '  ' + line;
+          }).join('\n').substr(2);
+        } else {
+          str = '\n' + str.split('\n').map(function(line) {
+            return '   ' + line;
+          }).join('\n');
+        }
+      }
+    } else {
+      str = ctx.stylize('[Circular]', 'special');
+    }
+  }
+  if (isUndefined(name)) {
+    if (array && key.match(/^\d+$/)) {
+      return str;
+    }
+    name = JSON.stringify('' + key);
+    if (name.match(/^"([a-zA-Z_][a-zA-Z_0-9]*)"$/)) {
+      name = name.substr(1, name.length - 2);
+      name = ctx.stylize(name, 'name');
+    } else {
+      name = name.replace(/'/g, "\\'")
+                 .replace(/\\"/g, '"')
+                 .replace(/(^"|"$)/g, "'");
+      name = ctx.stylize(name, 'string');
+    }
+  }
+
+  return name + ': ' + str;
+}
+
+
+function reduceToSingleString(output, base, braces) {
+  var numLinesEst = 0;
+  var length = output.reduce(function(prev, cur) {
+    numLinesEst++;
+    if (cur.indexOf('\n') >= 0) numLinesEst++;
+    return prev + cur.replace(/\u001b\[\d\d?m/g, '').length + 1;
+  }, 0);
+
+  if (length > 60) {
+    return braces[0] +
+           (base === '' ? '' : base + '\n ') +
+           ' ' +
+           output.join(',\n  ') +
+           ' ' +
+           braces[1];
+  }
+
+  return braces[0] + base + ' ' + output.join(', ') + ' ' + braces[1];
+}
+
+
+// NOTE: These type checking functions intentionally don't use `instanceof`
+// because it is fragile and can be easily faked with `Object.create()`.
+function isArray(ar) {
+  return Array.isArray(ar);
+}
+exports.isArray = isArray;
+
+function isBoolean(arg) {
+  return typeof arg === 'boolean';
+}
+exports.isBoolean = isBoolean;
+
+function isNull(arg) {
+  return arg === null;
+}
+exports.isNull = isNull;
+
+function isNullOrUndefined(arg) {
+  return arg == null;
+}
+exports.isNullOrUndefined = isNullOrUndefined;
+
+function isNumber(arg) {
+  return typeof arg === 'number';
+}
+exports.isNumber = isNumber;
+
+function isString(arg) {
+  return typeof arg === 'string';
+}
+exports.isString = isString;
+
+function isSymbol(arg) {
+  return typeof arg === 'symbol';
+}
+exports.isSymbol = isSymbol;
+
+function isUndefined(arg) {
+  return arg === void 0;
+}
+exports.isUndefined = isUndefined;
+
+function isRegExp(re) {
+  return isObject(re) && objectToString(re) === '[object RegExp]';
+}
+exports.isRegExp = isRegExp;
+
+function isObject(arg) {
+  return typeof arg === 'object' && arg !== null;
+}
+exports.isObject = isObject;
+
+function isDate(d) {
+  return isObject(d) && objectToString(d) === '[object Date]';
+}
+exports.isDate = isDate;
+
+function isError(e) {
+  return isObject(e) &&
+      (objectToString(e) === '[object Error]' || e instanceof Error);
+}
+exports.isError = isError;
+
+function isFunction(arg) {
+  return typeof arg === 'function';
+}
+exports.isFunction = isFunction;
+
+function isPrimitive(arg) {
+  return arg === null ||
+         typeof arg === 'boolean' ||
+         typeof arg === 'number' ||
+         typeof arg === 'string' ||
+         typeof arg === 'symbol' ||  // ES6 symbol
+         typeof arg === 'undefined';
+}
+exports.isPrimitive = isPrimitive;
+
+exports.isBuffer = require('./support/isBuffer');
+
+function objectToString(o) {
+  return Object.prototype.toString.call(o);
+}
+
+
+function pad(n) {
+  return n < 10 ? '0' + n.toString(10) : n.toString(10);
+}
+
+
+var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep',
+              'Oct', 'Nov', 'Dec'];
+
+// 26 Feb 16:19:34
+function timestamp() {
+  var d = new Date();
+  var time = [pad(d.getHours()),
+              pad(d.getMinutes()),
+              pad(d.getSeconds())].join(':');
+  return [d.getDate(), months[d.getMonth()], time].join(' ');
+}
+
+
+// log is just a thin wrapper to console.log that prepends a timestamp
+exports.log = function() {
+  console.log('%s - %s', timestamp(), exports.format.apply(exports, arguments));
+};
+
+
+/**
+ * Inherit the prototype methods from one constructor into another.
+ *
+ * The Function.prototype.inherits from lang.js rewritten as a standalone
+ * function (not on Function.prototype). NOTE: If this file is to be loaded
+ * during bootstrapping this function needs to be rewritten using some native
+ * functions as prototype setup using normal JavaScript does not work as
+ * expected during bootstrapping (see mirror.js in r114903).
+ *
+ * @param {function} ctor Constructor function which needs to inherit the
+ *     prototype.
+ * @param {function} superCtor Constructor function to inherit prototype from.
+ */
+exports.inherits = require('inherits');
+
+exports._extend = function(origin, add) {
+  // Don't do anything if add isn't an object
+  if (!add || !isObject(add)) return origin;
+
+  var keys = Object.keys(add);
+  var i = keys.length;
+  while (i--) {
+    origin[keys[i]] = add[keys[i]];
+  }
+  return origin;
+};
+
+function hasOwnProperty(obj, prop) {
+  return Object.prototype.hasOwnProperty.call(obj, prop);
+}
+
+}).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"./support/isBuffer":8,"_process":11,"inherits":7}],10:[function(require,module,exports){
+(function (process){
+// .dirname, .basename, and .extname methods are extracted from Node.js v8.11.1,
+// backported and transplited with Babel, with backwards-compat fixes
+
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+// resolves . and .. elements in a path array with directory names there
+// must be no slashes, empty elements, or device names (c:\) in the array
+// (so also no leading and trailing slashes - it does not distinguish
+// relative and absolute paths)
+function normalizeArray(parts, allowAboveRoot) {
+  // if the path tries to go above the root, `up` ends up > 0
+  var up = 0;
+  for (var i = parts.length - 1; i >= 0; i--) {
+    var last = parts[i];
+    if (last === '.') {
+      parts.splice(i, 1);
+    } else if (last === '..') {
+      parts.splice(i, 1);
+      up++;
+    } else if (up) {
+      parts.splice(i, 1);
+      up--;
+    }
+  }
+
+  // if the path is allowed to go above the root, restore leading ..s
+  if (allowAboveRoot) {
+    for (; up--; up) {
+      parts.unshift('..');
+    }
+  }
+
+  return parts;
+}
+
+// path.resolve([from ...], to)
+// posix version
+exports.resolve = function() {
+  var resolvedPath = '',
+      resolvedAbsolute = false;
+
+  for (var i = arguments.length - 1; i >= -1 && !resolvedAbsolute; i--) {
+    var path = (i >= 0) ? arguments[i] : process.cwd();
+
+    // Skip empty and invalid entries
+    if (typeof path !== 'string') {
+      throw new TypeError('Arguments to path.resolve must be strings');
+    } else if (!path) {
+      continue;
+    }
+
+    resolvedPath = path + '/' + resolvedPath;
+    resolvedAbsolute = path.charAt(0) === '/';
+  }
+
+  // At this point the path should be resolved to a full absolute path, but
+  // handle relative paths to be safe (might happen when process.cwd() fails)
+
+  // Normalize the path
+  resolvedPath = normalizeArray(filter(resolvedPath.split('/'), function(p) {
+    return !!p;
+  }), !resolvedAbsolute).join('/');
+
+  return ((resolvedAbsolute ? '/' : '') + resolvedPath) || '.';
+};
+
+// path.normalize(path)
+// posix version
+exports.normalize = function(path) {
+  var isAbsolute = exports.isAbsolute(path),
+      trailingSlash = substr(path, -1) === '/';
+
+  // Normalize the path
+  path = normalizeArray(filter(path.split('/'), function(p) {
+    return !!p;
+  }), !isAbsolute).join('/');
+
+  if (!path && !isAbsolute) {
+    path = '.';
+  }
+  if (path && trailingSlash) {
+    path += '/';
+  }
+
+  return (isAbsolute ? '/' : '') + path;
+};
+
+// posix version
+exports.isAbsolute = function(path) {
+  return path.charAt(0) === '/';
+};
+
+// posix version
+exports.join = function() {
+  var paths = Array.prototype.slice.call(arguments, 0);
+  return exports.normalize(filter(paths, function(p, index) {
+    if (typeof p !== 'string') {
+      throw new TypeError('Arguments to path.join must be strings');
+    }
+    return p;
+  }).join('/'));
+};
+
+
+// path.relative(from, to)
+// posix version
+exports.relative = function(from, to) {
+  from = exports.resolve(from).substr(1);
+  to = exports.resolve(to).substr(1);
+
+  function trim(arr) {
+    var start = 0;
+    for (; start < arr.length; start++) {
+      if (arr[start] !== '') break;
+    }
+
+    var end = arr.length - 1;
+    for (; end >= 0; end--) {
+      if (arr[end] !== '') break;
+    }
+
+    if (start > end) return [];
+    return arr.slice(start, end - start + 1);
+  }
+
+  var fromParts = trim(from.split('/'));
+  var toParts = trim(to.split('/'));
+
+  var length = Math.min(fromParts.length, toParts.length);
+  var samePartsLength = length;
+  for (var i = 0; i < length; i++) {
+    if (fromParts[i] !== toParts[i]) {
+      samePartsLength = i;
+      break;
+    }
+  }
+
+  var outputParts = [];
+  for (var i = samePartsLength; i < fromParts.length; i++) {
+    outputParts.push('..');
+  }
+
+  outputParts = outputParts.concat(toParts.slice(samePartsLength));
+
+  return outputParts.join('/');
+};
+
+exports.sep = '/';
+exports.delimiter = ':';
+
+exports.dirname = function (path) {
+  if (typeof path !== 'string') path = path + '';
+  if (path.length === 0) return '.';
+  var code = path.charCodeAt(0);
+  var hasRoot = code === 47 /*/*/;
+  var end = -1;
+  var matchedSlash = true;
+  for (var i = path.length - 1; i >= 1; --i) {
+    code = path.charCodeAt(i);
+    if (code === 47 /*/*/) {
+        if (!matchedSlash) {
+          end = i;
+          break;
+        }
+      } else {
+      // We saw the first non-path separator
+      matchedSlash = false;
+    }
+  }
+
+  if (end === -1) return hasRoot ? '/' : '.';
+  if (hasRoot && end === 1) {
+    // return '//';
+    // Backwards-compat fix:
+    return '/';
+  }
+  return path.slice(0, end);
+};
+
+function basename(path) {
+  if (typeof path !== 'string') path = path + '';
+
+  var start = 0;
+  var end = -1;
+  var matchedSlash = true;
+  var i;
+
+  for (i = path.length - 1; i >= 0; --i) {
+    if (path.charCodeAt(i) === 47 /*/*/) {
+        // If we reached a path separator that was not part of a set of path
+        // separators at the end of the string, stop now
+        if (!matchedSlash) {
+          start = i + 1;
+          break;
+        }
+      } else if (end === -1) {
+      // We saw the first non-path separator, mark this as the end of our
+      // path component
+      matchedSlash = false;
+      end = i + 1;
+    }
+  }
+
+  if (end === -1) return '';
+  return path.slice(start, end);
+}
+
+// Uses a mixed approach for backwards-compatibility, as ext behavior changed
+// in new Node.js versions, so only basename() above is backported here
+exports.basename = function (path, ext) {
+  var f = basename(path);
+  if (ext && f.substr(-1 * ext.length) === ext) {
+    f = f.substr(0, f.length - ext.length);
+  }
+  return f;
+};
+
+exports.extname = function (path) {
+  if (typeof path !== 'string') path = path + '';
+  var startDot = -1;
+  var startPart = 0;
+  var end = -1;
+  var matchedSlash = true;
+  // Track the state of characters (if any) we see before our first dot and
+  // after any path separator we find
+  var preDotState = 0;
+  for (var i = path.length - 1; i >= 0; --i) {
+    var code = path.charCodeAt(i);
+    if (code === 47 /*/*/) {
+        // If we reached a path separator that was not part of a set of path
+        // separators at the end of the string, stop now
+        if (!matchedSlash) {
+          startPart = i + 1;
+          break;
+        }
+        continue;
+      }
+    if (end === -1) {
+      // We saw the first non-path separator, mark this as the end of our
+      // extension
+      matchedSlash = false;
+      end = i + 1;
+    }
+    if (code === 46 /*.*/) {
+        // If this is our first dot, mark it as the start of our extension
+        if (startDot === -1)
+          startDot = i;
+        else if (preDotState !== 1)
+          preDotState = 1;
+    } else if (startDot !== -1) {
+      // We saw a non-dot and non-path separator before our dot, so we should
+      // have a good chance at having a non-empty extension
+      preDotState = -1;
+    }
+  }
+
+  if (startDot === -1 || end === -1 ||
+      // We saw a non-dot character immediately before the dot
+      preDotState === 0 ||
+      // The (right-most) trimmed path component is exactly '..'
+      preDotState === 1 && startDot === end - 1 && startDot === startPart + 1) {
+    return '';
+  }
+  return path.slice(startDot, end);
+};
+
+function filter (xs, f) {
+    if (xs.filter) return xs.filter(f);
+    var res = [];
+    for (var i = 0; i < xs.length; i++) {
+        if (f(xs[i], i, xs)) res.push(xs[i]);
+    }
+    return res;
+}
+
+// String.prototype.substr - negative index don't work in IE8
+var substr = 'ab'.substr(-1) === 'b'
+    ? function (str, start, len) { return str.substr(start, len) }
+    : function (str, start, len) {
+        if (start < 0) start = str.length + start;
+        return str.substr(start, len);
+    }
+;
+
+}).call(this,require('_process'))
+},{"_process":11}],11:[function(require,module,exports){
+// shim for using process in browser
+var process = module.exports = {};
+
+// cached from whatever global is present so that test runners that stub it
+// don't break things.  But we need to wrap it in a try catch in case it is
+// wrapped in strict mode code which doesn't define any globals.  It's inside a
+// function because try/catches deoptimize in certain engines.
+
+var cachedSetTimeout;
+var cachedClearTimeout;
+
+function defaultSetTimout() {
+    throw new Error('setTimeout has not been defined');
+}
+function defaultClearTimeout () {
+    throw new Error('clearTimeout has not been defined');
+}
+(function () {
+    try {
+        if (typeof setTimeout === 'function') {
+            cachedSetTimeout = setTimeout;
+        } else {
+            cachedSetTimeout = defaultSetTimout;
+        }
+    } catch (e) {
+        cachedSetTimeout = defaultSetTimout;
+    }
+    try {
+        if (typeof clearTimeout === 'function') {
+            cachedClearTimeout = clearTimeout;
+        } else {
+            cachedClearTimeout = defaultClearTimeout;
+        }
+    } catch (e) {
+        cachedClearTimeout = defaultClearTimeout;
+    }
+} ())
+function runTimeout(fun) {
+    if (cachedSetTimeout === setTimeout) {
+        //normal enviroments in sane situations
+        return setTimeout(fun, 0);
+    }
+    // if setTimeout wasn't available but was latter defined
+    if ((cachedSetTimeout === defaultSetTimout || !cachedSetTimeout) && setTimeout) {
+        cachedSetTimeout = setTimeout;
+        return setTimeout(fun, 0);
+    }
+    try {
+        // when when somebody has screwed with setTimeout but no I.E. maddness
+        return cachedSetTimeout(fun, 0);
+    } catch(e){
+        try {
+            // When we are in I.E. but the script has been evaled so I.E. doesn't trust the global object when called normally
+            return cachedSetTimeout.call(null, fun, 0);
+        } catch(e){
+            // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error
+            return cachedSetTimeout.call(this, fun, 0);
+        }
+    }
+
+
+}
+function runClearTimeout(marker) {
+    if (cachedClearTimeout === clearTimeout) {
+        //normal enviroments in sane situations
+        return clearTimeout(marker);
+    }
+    // if clearTimeout wasn't available but was latter defined
+    if ((cachedClearTimeout === defaultClearTimeout || !cachedClearTimeout) && clearTimeout) {
+        cachedClearTimeout = clearTimeout;
+        return clearTimeout(marker);
+    }
+    try {
+        // when when somebody has screwed with setTimeout but no I.E. maddness
+        return cachedClearTimeout(marker);
+    } catch (e){
+        try {
+            // When we are in I.E. but the script has been evaled so I.E. doesn't  trust the global object when called normally
+            return cachedClearTimeout.call(null, marker);
+        } catch (e){
+            // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error.
+            // Some versions of I.E. have different rules for clearTimeout vs setTimeout
+            return cachedClearTimeout.call(this, marker);
+        }
+    }
+
+
+
+}
+var queue = [];
+var draining = false;
+var currentQueue;
+var queueIndex = -1;
+
+function cleanUpNextTick() {
+    if (!draining || !currentQueue) {
+        return;
+    }
+    draining = false;
+    if (currentQueue.length) {
+        queue = currentQueue.concat(queue);
+    } else {
+        queueIndex = -1;
+    }
+    if (queue.length) {
+        drainQueue();
+    }
+}
+
+function drainQueue() {
+    if (draining) {
+        return;
+    }
+    var timeout = runTimeout(cleanUpNextTick);
+    draining = true;
+
+    var len = queue.length;
+    while(len) {
+        currentQueue = queue;
+        queue = [];
+        while (++queueIndex < len) {
+            if (currentQueue) {
+                currentQueue[queueIndex].run();
+            }
+        }
+        queueIndex = -1;
+        len = queue.length;
+    }
+    currentQueue = null;
+    draining = false;
+    runClearTimeout(timeout);
+}
+
+process.nextTick = function (fun) {
+    var args = new Array(arguments.length - 1);
+    if (arguments.length > 1) {
+        for (var i = 1; i < arguments.length; i++) {
+            args[i - 1] = arguments[i];
+        }
+    }
+    queue.push(new Item(fun, args));
+    if (queue.length === 1 && !draining) {
+        runTimeout(drainQueue);
+    }
+};
+
+// v8 likes predictible objects
+function Item(fun, array) {
+    this.fun = fun;
+    this.array = array;
+}
+Item.prototype.run = function () {
+    this.fun.apply(null, this.array);
+};
+process.title = 'browser';
+process.browser = true;
+process.env = {};
+process.argv = [];
+process.version = ''; // empty string to avoid regexp issues
+process.versions = {};
+
+function noop() {}
+
+process.on = noop;
+process.addListener = noop;
+process.once = noop;
+process.off = noop;
+process.removeListener = noop;
+process.removeAllListeners = noop;
+process.emit = noop;
+process.prependListener = noop;
+process.prependOnceListener = noop;
+
+process.listeners = function (name) { return [] }
+
+process.binding = function (name) {
+    throw new Error('process.binding is not supported');
+};
+
+process.cwd = function () { return '/' };
+process.chdir = function (dir) {
+    throw new Error('process.chdir is not supported');
+};
+process.umask = function() { return 0; };
+
+},{}],12:[function(require,module,exports){
 (function webpackUniversalModuleDefinition(root, factory) {
 /* istanbul ignore next */
 	if(typeof exports === 'object' && typeof module === 'object')
@@ -174,7 +2450,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	var syntax_1 = __webpack_require__(2);
 	exports.Syntax = syntax_1.Syntax;
 	// Sync with *.json manifests.
-	exports.version = '4.0.0';
+	exports.version = '4.0.1';
 
 
 /***/ },
@@ -2111,11 +4387,18 @@ return /******/ (function(modules) { // webpackBootstrap
 	            column: this.startMarker.column
 	        };
 	    };
-	    Parser.prototype.startNode = function (token) {
+	    Parser.prototype.startNode = function (token, lastLineStart) {
+	        if (lastLineStart === void 0) { lastLineStart = 0; }
+	        var column = token.start - token.lineStart;
+	        var line = token.lineNumber;
+	        if (column < 0) {
+	            column += lastLineStart;
+	            line--;
+	        }
 	        return {
 	            index: token.start,
-	            line: token.lineNumber,
-	            column: token.start - token.lineStart
+	            line: line,
+	            column: column
 	        };
 	    };
 	    Parser.prototype.finalize = function (marker, node) {
@@ -2447,7 +4730,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	        var isGenerator = false;
 	        var node = this.createNode();
 	        var previousAllowYield = this.context.allowYield;
-	        this.context.allowYield = false;
+	        this.context.allowYield = true;
 	        var params = this.parseFormalParameters();
 	        var method = this.parsePropertyMethod(params);
 	        this.context.allowYield = previousAllowYield;
@@ -2517,7 +4800,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	            this.nextToken();
 	            computed = this.match('[');
 	            isAsync = !this.hasLineTerminator && (id === 'async') &&
-	                !this.match(':') && !this.match('(') && !this.match('*');
+	                !this.match(':') && !this.match('(') && !this.match('*') && !this.match(',');
 	            key = isAsync ? this.parseObjectPropertyKey() : this.finalize(node, new Node.Identifier(id));
 	        }
 	        else if (this.match('*')) {
@@ -3116,12 +5399,15 @@ return /******/ (function(modules) { // webpackBootstrap
 	            // Final reduce to clean-up the stack.
 	            var i = stack.length - 1;
 	            expr = stack[i];
-	            markers.pop();
+	            var lastMarker = markers.pop();
 	            while (i > 1) {
-	                var node = this.startNode(markers.pop());
+	                var marker = markers.pop();
+	                var lastLineStart = lastMarker && lastMarker.lineStart;
+	                var node = this.startNode(marker, lastLineStart);
 	                var operator = stack[i - 1];
 	                expr = this.finalize(node, new Node.BinaryExpression(operator, stack[i - 2], expr));
 	                i -= 2;
+	                lastMarker = marker;
 	            }
 	        }
 	        return expr;
@@ -3903,8 +6189,10 @@ return /******/ (function(modules) { // webpackBootstrap
 	        }
 	        var node = this.createNode();
 	        this.expectKeyword('return');
-	        var hasArgument = !this.match(';') && !this.match('}') &&
-	            !this.hasLineTerminator && this.lookahead.type !== 2 /* EOF */;
+	        var hasArgument = (!this.match(';') && !this.match('}') &&
+	            !this.hasLineTerminator && this.lookahead.type !== 2 /* EOF */) ||
+	            this.lookahead.type === 8 /* StringLiteral */ ||
+	            this.lookahead.type === 10 /* Template */;
 	        var argument = hasArgument ? this.parseExpression() : null;
 	        this.consumeSemicolon();
 	        return this.finalize(node, new Node.ReturnStatement(argument));
@@ -4469,7 +6757,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	        var node = this.createNode();
 	        var isGenerator = false;
 	        var previousAllowYield = this.context.allowYield;
-	        this.context.allowYield = false;
+	        this.context.allowYield = !isGenerator;
 	        var formalParameters = this.parseFormalParameters();
 	        if (formalParameters.params.length > 0) {
 	            this.tolerateError(messages_1.Messages.BadGetterArity);
@@ -4482,7 +6770,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	        var node = this.createNode();
 	        var isGenerator = false;
 	        var previousAllowYield = this.context.allowYield;
-	        this.context.allowYield = false;
+	        this.context.allowYield = !isGenerator;
 	        var formalParameters = this.parseFormalParameters();
 	        if (formalParameters.params.length !== 1) {
 	            this.tolerateError(messages_1.Messages.BadSetterArity);
@@ -4583,13 +6871,8 @@ return /******/ (function(modules) { // webpackBootstrap
 	                    isAsync = true;
 	                    token = this.lookahead;
 	                    key = this.parseObjectPropertyKey();
-	                    if (token.type === 3 /* Identifier */) {
-	                        if (token.value === 'get' || token.value === 'set') {
-	                            this.tolerateUnexpectedToken(token);
-	                        }
-	                        else if (token.value === 'constructor') {
-	                            this.tolerateUnexpectedToken(token, messages_1.Messages.ConstructorIsAsync);
-	                        }
+	                    if (token.type === 3 /* Identifier */ && token.value === 'constructor') {
+	                        this.tolerateUnexpectedToken(token, messages_1.Messages.ConstructorIsAsync);
 	                    }
 	                }
 	            }
@@ -4702,6 +6985,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	    Parser.prototype.parseModule = function () {
 	        this.context.strict = true;
 	        this.context.isModule = true;
+	        this.scanner.isModule = true;
 	        var node = this.createNode();
 	        var body = this.parseDirectivePrologues();
 	        while (this.lookahead.type !== 2 /* EOF */) {
@@ -5130,6 +7414,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	        this.source = code;
 	        this.errorHandler = handler;
 	        this.trackComment = false;
+	        this.isModule = false;
 	        this.length = code.length;
 	        this.index = 0;
 	        this.lineNumber = (code.length > 0) ? 1 : 0;
@@ -5335,7 +7620,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	                    break;
 	                }
 	            }
-	            else if (ch === 0x3C) {
+	            else if (ch === 0x3C && !this.isModule) {
 	                if (this.source.slice(this.index + 1, this.index + 4) === '!--') {
 	                    this.index += 4; // `<!--`
 	                    var comment = this.skipSingleLineComment(4);
@@ -6699,7 +8984,7 @@ return /******/ (function(modules) { // webpackBootstrap
 /******/ ])
 });
 ;
-},{}],2:[function(require,module,exports){
+},{}],13:[function(require,module,exports){
 ;(function() {
 'use strict'
 /* global define */
@@ -7014,12 +9299,27 @@ function bootstrap(esprima, exportFn) {
 }
 })()
 
-},{"esprima":1}],3:[function(require,module,exports){
+},{"esprima":12}],14:[function(require,module,exports){
 (function (__dirname){
 'use strict'
 
+/**
+ * @name peacock.defaultTheme
+ * @returns {Object} the default peacock theme used to highlight code
+ */
 var defaultTheme = require('./themes/default')
+
+/**
+ * @name peacock.spans
+ * @returns {Object} the default peacock spans used to wrap code tokens
+ */
 var spans        = require('./spans')
+/**
+ * @name peacock.classes
+ * @returns {Object} the default peacock classes used to highlight code
+ */
+var classes = spans.classes
+
 var redeyed      = require('redeyed')
 var path         = require('path')
 
@@ -7038,6 +9338,17 @@ function resolveTheme(t) {
   }
 }
 
+/**
+ * Highlights the proviced code or throws an error if it was not able to parse it.
+ *
+ * @name peacock.highlight
+ * @param {String} code to highlight
+ * @param {Object} $0 options
+ * @param {Object|String} [$0.theme = peacock.defaultTheme] to use when highlighting [empty sample](https://github.com/thlorenz/peacock/blob/master/themes/empty.js)
+ * @param {Boolean} [$0.linenos = false] if `true` line numbers will be included
+ * @param {Boolean} [$0.jsx = true] if `true` peacock will support `jsx` syntax (which makes highlighting a tad bit slower)
+ * @returns {String} the HTML with containing the highlighted code
+ */
 function highlight(code, opts) {
   var toString = Object.prototype.toString
   var theme
@@ -7128,11 +9439,11 @@ module.exports = {
     highlight    : highlight
   , defaultTheme : defaultTheme
   , spans        : spans
-  , classes      : spans.classes
+  , classes      : classes
 }
 
 }).call(this,"/node_modules/peacock")
-},{"./spans":4,"./themes/default":5,"path":13,"redeyed":2}],4:[function(require,module,exports){
+},{"./spans":15,"./themes/default":16,"path":10,"redeyed":13}],15:[function(require,module,exports){
 'use strict'
 
 var classes = {
@@ -7217,7 +9528,7 @@ Object.keys(classes)
 module.exports = spans
 module.exports.classes = classes
 
-},{}],5:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 var spans = require('../spans')
 
 module.exports = {
@@ -7408,2210 +9719,9 @@ module.exports = {
   , _default: undefined
 }
 
-},{"../spans":4}],6:[function(require,module,exports){
-'use strict'
-
-const React = require('react')
-const { Component } = React
-const ReactDOM = require('react-dom')
-const assert = require('assert')
-const scrollIntoView = require('scroll-into-view-if-needed')
-const { highlight } = require('peacock')
-
-const Theme = require('../theme.browser')
-const MarkerResolver = require('../../lib/rendering/marker-resolver')
-
-class CodeView extends Component {
-  constructor(props) {
-    super()
-
-    const { onmarkerClicked } = props
-    assert.equal(typeof onmarkerClicked, 'function', 'need to pass onmarkerClicked function')
-    this._bind()
-  }
-
-  _bind() {
-    this._onmarkerClicked = this._onmarkerClicked.bind(this)
-  }
-
-  componentDidMount() {
-    const rootEl = ReactDOM.findDOMNode(this)
-    rootEl.addEventListener('click', event => {
-      const tgt = event.target
-      const { markerid } = tgt.dataset
-      if (markerid == null) { return }
-      event.preventDefault()
-      event.stopPropagation()
-      this._onmarkerClicked(parseInt(markerid))
-    })
-  }
-
-  componentDidUpdate() {
-    const { selectedLocation } = this.props
-    if (selectedLocation == null) { return }
-    const code = document.getElementById(`code-location-${selectedLocation}`)
-    if (code == null) { return }
-    scrollIntoView(code, { behavior: 'smooth', scrollMode: 'if-needed' })
-  }
-
-  render() {
-    const {
-        className = ''
-      , code
-      , ics
-      , deopts
-      , codes
-      , icLocations
-      , deoptLocations
-      , codeLocations
-      , selectedLocation
-      , includeAllSeverities
-    } = this.props
-
-    const markerResolver = new MarkerResolver({
-        deopts
-      , deoptLocations
-      , ics
-      , icLocations
-      , codes
-      , codeLocations
-      , isterminal: false
-      , selectedLocation
-      , includeAllSeverities
-    })
-
-    const theme = new Theme(markerResolver).theme
-    const highlightedCode = highlight(code, { theme, linenos: true })
-    return (
-      React.createElement( 'div', { className: className },
-        React.createElement( 'div', { dangerouslySetInnerHTML: {__html: highlightedCode} })
-      )
-    )
-  }
-
-  _onmarkerClicked(id) {
-    const { onmarkerClicked } = this.props
-    onmarkerClicked(id)
-  }
-}
-
-module.exports = {
-  CodeView
-}
-
-},{"../../lib/rendering/marker-resolver":60,"../theme.browser":50,"assert":12,"peacock":3,"react":40,"react-dom":20,"scroll-into-view-if-needed":49}],7:[function(require,module,exports){
-'use strict'
-
-const React = require('react')
-const { Component } = React
-const summarizeFile = require('../../lib/grouping/summarize-file')
-const assert = require('assert')
-
-const severityClassNames = [
-    'green i'
-  , 'blue'
-  , 'red b'
-]
-
-const underlineTdClass = ' bb b--silver pt2 pb2'
-
-function coloredTds(arr) {
-  return arr.map((x, idx) => {
-    const className = x > 0
-      ? severityClassNames[idx] + ' tr' + underlineTdClass
-      : 'silver i tr' + underlineTdClass
-    return React.createElement( 'td', { key: idx, className: className }, x)
-  })
-}
-
-function bySeverityScoreDesc(ref, ref$1) {
-  var s1 = ref.summary;
-  var s2 = ref$1.summary;
-
-  return s1.severityScore < s2.severityScore ? 1 : -1
-}
-
-class FilesView extends Component {
-  constructor(props) {
-    super(props)
-    const { onfileClicked } = props
-    assert.equal(typeof onfileClicked, 'function', 'need to pass onfileClicked function')
-  }
-
-  render() {
-    const { groups, includeAllSeverities, className = '' } = this.props
-    const tableHeader = this._renderTableHeader()
-    const rows = []
-    const filesSeverities = Array.from(groups)
-      .map((ref) => {
-        var file = ref[0];
-        var info = ref[1];
-
-        const { deopts, ics, codes } = info
-        const summary = summarizeFile({ ics, deopts, codes })
-        return { file, summary }
-      })
-      .filter((ref) => {
-        var summary = ref.summary;
-
-        return includeAllSeverities || summary.hasCriticalSeverities;
-    })
-      .sort(bySeverityScoreDesc)
-
-    for (const { file, summary } of filesSeverities) {
-      const { icSeverities, deoptSeverities, codeStates } = summary
-      const { relativePath } = groups.get(file)
-      const rendered = this._renderFile({
-          file
-        , relativePath
-        , icSeverities
-        , deoptSeverities
-        , codeStates
-      })
-      rows.push(rendered)
-    }
-    return (
-      React.createElement( 'div', { className: className },
-        React.createElement( 'table', { cellSpacing: '0' },
-          tableHeader,
-          React.createElement( 'tbody', null, rows )
-        )
-      )
-    )
-  }
-
-  _renderTableHeader() {
-    const topHeaderClass = 'bt br bl bw1 b--silver bg-light-green tc br1'
-    const subHeaderClass = 'bb br bl bw1 b--silver br1'
-    return (
-      React.createElement( 'thead', null,
-        React.createElement( 'tr', null,
-          React.createElement( 'td', { className: topHeaderClass + ' bb', rowSpan: '2' }, "File"),
-          React.createElement( 'td', { colSpan: '3', className: topHeaderClass }, "Optimizations"),
-          React.createElement( 'td', { colSpan: '3', className: topHeaderClass }, "Deoptimizations"),
-          React.createElement( 'td', { colSpan: '3', className: topHeaderClass }, "Inline Caches")
-        ),
-        React.createElement( 'tr', null,
-          React.createElement( 'td', { className: subHeaderClass }, "Optimized"),
-          React.createElement( 'td', { className: subHeaderClass }, "Optimizable"),
-          React.createElement( 'td', { className: subHeaderClass }, "Compiled"),
-          React.createElement( 'td', { className: subHeaderClass }, "Severity 1"),
-          React.createElement( 'td', { className: subHeaderClass }, "Severity 2"),
-          React.createElement( 'td', { className: subHeaderClass }, "Severity 3"),
-          React.createElement( 'td', { className: subHeaderClass }, "Severity 1"),
-          React.createElement( 'td', { className: subHeaderClass }, "Severity 2"),
-          React.createElement( 'td', { className: subHeaderClass }, "Severity 3")
-        )
-      )
-    )
-  }
-
-  _renderFile(ref) {
-    var file = ref.file;
-    var relativePath = ref.relativePath;
-    var deoptSeverities = ref.deoptSeverities;
-    var icSeverities = ref.icSeverities;
-    var codeStates = ref.codeStates;
-
-    const { selectedFile } = this.props
-
-    // Optimized = 3, Compile = 0, but we show them in order of serverity, so we reverse
-    const codeColumns = coloredTds(codeStates.reverse())
-    const deoptColumns = coloredTds(deoptSeverities.slice(1))
-    const icColumns = coloredTds(icSeverities.slice(1))
-
-    const onfileClicked = this._onfileClicked.bind(this, file)
-    const selectedClass = file === selectedFile ? 'bg-light-yellow' : ''
-    return (
-      React.createElement( 'tr', { key: relativePath, className: 'bb b--silver ' + selectedClass },
-        React.createElement( 'td', null,
-          React.createElement( 'a', { className: 'i silver' + underlineTdClass, href: '#', onClick: onfileClicked },
-            relativePath
-          )
-        ),
-        codeColumns,
-        deoptColumns,
-        icColumns
-      )
-    )
-  }
-
-  _onfileClicked(file) {
-    const { onfileClicked } = this.props
-    onfileClicked(file)
-  }
-}
-
-module.exports = { FilesView }
-
-},{"../../lib/grouping/summarize-file":54,"assert":12,"react":40}],8:[function(require,module,exports){
-'use strict'
-
-const React = require('react')
-const { Component } = React
-const scrollIntoView = require('scroll-into-view-if-needed')
-
-const assert = require('assert')
-const { nameIcState, severityIcState } = require('../../lib/log-processing/ic-state')
-const {
-    nameOptimizationState
-  , severityOfOptimizationState
-} = require('../../lib/log-processing/optimization-state')
-const { MIN_SEVERITY } = require('../../lib/severities')
-
-const severityClassNames = [
-    'green i'
-  , 'blue'
-  , 'red b'
-]
-
-class SummaryView extends Component {
-  constructor(props) {
-    super(props)
-    const { ics, icLocations, deopts, deoptLocations, onsummaryClicked } = props
-
-    assert(ics == null || icLocations != null, 'need to provide locations for ics')
-    assert(deopts == null || deoptLocations != null, 'need to provide locations for deopts')
-    assert.equal(typeof onsummaryClicked, 'function', 'need to pass onsummaryClicked function')
-
-    this._bind()
-  }
-
-  _bind() {
-    this._renderIc = this._renderIc.bind(this)
-    this._renderDeopt = this._renderDeopt.bind(this)
-    this._renderCode = this._renderCode.bind(this)
-  }
-
-  componentDidUpdate() {
-    const { selectedLocation } = this.props
-    if (selectedLocation == null) { return }
-    const summary = document.getElementById(`summary-location-${selectedLocation}`)
-    if (summary == null) { return }
-    scrollIntoView(summary, { behavior: 'smooth', scrollMode: 'if-needed' })
-  }
-
-  render() {
-    const {
-        className = ''
-      , ics
-      , icLocations
-      , deopts
-      , deoptLocations
-      , codes
-      , codeLocations
-    } = this.props
-    const renderedDeopts = this._renderDeopts(deopts, deoptLocations)
-    const renderedIcs = this._renderIcs(ics, icLocations)
-    const renderedCodes = this._renderCodes(codes, codeLocations)
-    return (
-      React.createElement( 'div', { className: className },
-        renderedCodes,
-        renderedDeopts,
-        renderedIcs
-      )
-    )
-  }
-
-  _renderDataPoint(data, locations, renderDetails) {
-    const { selectedLocation, includeAllSeverities, relativePath } = this.props
-    const rendered = []
-    for (const loc of locations) {
-      const info = data.get(loc)
-      if (!includeAllSeverities && info.severity <= MIN_SEVERITY) { continue }
-
-      const highlightedClass = selectedLocation === info.id ? 'bg-light-yellow' : 'bg-light-gray'
-      const className = `${highlightedClass} ba br2 bw1 ma3 pa2`
-      rendered.push(
-        React.createElement( 'div', { className: className, key: info.id },
-          this._summary(info, relativePath),
-          renderDetails(info)
-        )
-      )
-    }
-    return rendered
-  }
-
-  _renderIcs(ics, icLocations) {
-    if (ics == null) { return null }
-    const rendered = this._renderDataPoint(ics, icLocations, this._renderIc)
-    return (
-      React.createElement( 'div', { key: 'ics' },
-        React.createElement( 'h4', { className: 'underline' }, "Inline Caches"),
-        rendered
-      )
-    )
-  }
-
-  _renderDeopts(deopts, deoptLocations) {
-    if (deopts == null) { return null }
-    const rendered = this._renderDataPoint(deopts, deoptLocations, this._renderDeopt)
-    return (
-      React.createElement( 'div', { key: 'deopts' },
-        React.createElement( 'h4', { className: 'underline' }, "Deoptimizations"),
-        rendered
-      )
-    )
-  }
-
-  _renderCodes(codes, codeLocations, relativePath) {
-    if (codes == null) { return null }
-    const rendered = this._renderDataPoint(codes, codeLocations, this._renderCode)
-    return (
-      React.createElement( 'div', { key: 'optimizations' },
-        React.createElement( 'h4', { className: 'underline' }, "Optimizations"),
-        rendered
-      )
-    )
-  }
-
-  _summary(info, relativePath) {
-    const {
-        id
-      , functionName
-      , line
-      , column
-    } = info
-    const locationEl = React.createElement( 'span', { className: 'dark-blue f5 mr2' }, id)
-    const onclicked = e => {
-      e.preventDefault()
-      e.stopPropagation()
-      this._onsummaryClicked(id)
-    }
-
-    const fullLoc = (
-      React.createElement( 'a', { href: '#', className: 'i gray', onClick: onclicked },
-        functionName, " at ", relativePath, ":", line, ":", column
-      )
-    )
-    return (
-      React.createElement( 'div', { id: 'summary-location-' + id },
-        locationEl,
-        fullLoc
-      )
-    )
-  }
-
-  _renderDeopt(info) {
-    const rows = info.updates.map((update, idx) => this._deoptRow(update, idx))
-    return (
-      React.createElement( 'table', { key: 'deopt:' + info.id },
-        React.createElement( 'thead', { className: 'f5 b tc' },
-          React.createElement( 'tr', null,
-            React.createElement( 'td', null, "Timestamp" ),
-            React.createElement( 'td', null, "Bailout" ),
-            React.createElement( 'td', null, "Reason" ),
-            React.createElement( 'td', null, "Inlined" )
-          )
-        ),
-        React.createElement( 'tbody', null,
-          rows
-        )
-      )
-    )
-  }
-
-  _deoptRow(info) {
-    const {
-        inlined
-      , bailoutType
-      , deoptReason
-      , timestamp
-      , severity
-    } = info
-    const bailoutClassName = severityClassNames[severity - 1]
-    const timeStampMs = (timestamp / 1E3).toFixed()
-    return (
-      React.createElement( 'tr', { key: timestamp },
-        React.createElement( 'td', null, timeStampMs, "ms" ),
-        React.createElement( 'td', { className: bailoutClassName }, bailoutType),
-        React.createElement( 'td', { className: 'tr' }, deoptReason),
-        React.createElement( 'td', { className: 'gray tr' }, inlined ? 'yes' : 'no')
-      )
-    )
-  }
-
-  _renderIc(info) {
-    const rows = info.updates.map((update, idx) => this._icRow(update, idx))
-    return (
-      React.createElement( 'table', { key: 'ic:' + info.id },
-        React.createElement( 'thead', { className: 'f5 b tc' },
-          React.createElement( 'tr', null,
-            React.createElement( 'td', null, "Old State" ),
-            React.createElement( 'td', null, "New State" ),
-            React.createElement( 'td', null, "Key" ),
-            React.createElement( 'td', null, "Map" )
-          )
-        ),
-        React.createElement( 'tbody', null,
-          rows
-        )
-      )
-    )
-  }
-
-  _icRow(update, id) {
-    const {
-        oldState
-      , newState
-      , key
-      , map
-    } = update
-    const oldStateName = nameIcState(oldState)
-    const severityOldState = severityIcState(oldState)
-    const oldStateClassName = severityClassNames[severityOldState - 1]
-
-    const newStateName = nameIcState(newState)
-    const severityNewState = severityIcState(newState)
-    const newStateClassName = severityClassNames[severityNewState - 1]
-
-    const mapString = `0x${map}`
-    return (
-      React.createElement( 'tr', { key: key + id },
-        React.createElement( 'td', { className: oldStateClassName }, oldStateName),
-        React.createElement( 'td', { className: newStateClassName }, newStateName),
-        React.createElement( 'td', { className: 'black tl' }, key),
-        React.createElement( 'td', { className: 'gray tr' }, mapString)
-      )
-    )
-  }
-
-  _renderCode(info) {
-    const rows = info.updates.map((update, idx) => this._codeRow(update, idx))
-    return (
-      React.createElement( 'table', { key: 'code:' + info.id },
-        React.createElement( 'thead', { className: 'f5 b tc' },
-          React.createElement( 'tr', null,
-            React.createElement( 'td', null, "Timestamp" ),
-            React.createElement( 'td', null, "Optimization State" )
-          )
-        ),
-        React.createElement( 'tbody', null,
-          rows
-        )
-      )
-    )
-  }
-
-  _codeRow(info, id) {
-    const { timestamp, state } = info
-    const timeStampMs = (timestamp / 1E3).toFixed()
-    const codeState = nameOptimizationState(state)
-    const severity = severityOfOptimizationState(state)
-    const codeStateClassName = severityClassNames[severity - 1]
-
-    return (
-      React.createElement( 'tr', { key: timestamp },
-        React.createElement( 'td', null, timeStampMs, "ms" ),
-        React.createElement( 'td', { className: codeStateClassName }, codeState)
-      )
-    )
-  }
-
-  _onsummaryClicked(id) {
-    const { onsummaryClicked } = this.props
-    onsummaryClicked(id)
-  }
-}
-module.exports = {
-  SummaryView
-}
-
-},{"../../lib/log-processing/ic-state":58,"../../lib/log-processing/optimization-state":59,"../../lib/severities":64,"assert":12,"react":40,"scroll-into-view-if-needed":49}],9:[function(require,module,exports){
-'use strict'
-
-const React = require('react')
-const { Component } = React
-
-const assert = require('assert')
-
-class ToolbarView extends Component {
-  constructor(props) {
-    super(props)
-    const { onincludeAllSeveritiesChanged } = props
-    assert.equal(typeof onincludeAllSeveritiesChanged, 'function', 'need to pass onincludeAllSeveritiesChanged function')
-    this._bind()
-  }
-
-  _bind() {
-    this._onincludeAllSeveritiesToggled = this._onincludeAllSeveritiesToggled.bind(this)
-  }
-
-  render() {
-    const { className = '' } = this.props
-    const options = this._renderOptions()
-    return (
-      React.createElement( 'div', { className: className },
-        options
-      )
-    )
-  }
-
-  _renderOptions() {
-    const { includeAllSeverities } = this.props
-    return (
-      React.createElement( 'span', null, "Low Severities ", React.createElement( 'input', {
-          className: 'pointer', type: 'checkbox', defaultChecked: !!includeAllSeverities, onChange: this._onincludeAllSeveritiesToggled })
-      )
-    )
-  }
-
-  _onincludeAllSeveritiesToggled(e) {
-    const { onincludeAllSeveritiesChanged, includeAllSeverities } = this.props
-    onincludeAllSeveritiesChanged(!includeAllSeverities)
-  }
-}
-
-module.exports = {
-  ToolbarView
-}
-
-},{"assert":12,"react":40}],10:[function(require,module,exports){
-'use strict'
-
-const React = require('react')
-const { Component } = React
-const { render } = require('react-dom')
-const { deoptigate } = require('../')
-
-const { CodeView } = require('./components/code')
-const { SummaryView } = require('./components/summary')
-const { ToolbarView } = require('./components/toolbar')
-const { FilesView } = require('./components/files')
-
-function app() {
-  // makes React happy
-  document.body.innerHTML = ''
-  const el = document.createElement('div')
-  document.body.appendChild(el)
-  return el
-}
-
-class MainView extends Component {
-  constructor(props) {
-    super(props)
-    this.state = {
-        selectedFile: null
-      , selectedLocation: 2
-      , includeAllSeverities: false
-    }
-    this._bind()
-  }
-
-  _bind() {
-    this._onlocationSelected = this._onlocationSelected.bind(this)
-    this._onincludeAllSeveritiesChanged = this._onincludeAllSeveritiesChanged.bind(this)
-    this._onfileClicked = this._onfileClicked.bind(this)
-  }
-
-  render() {
-    const { groups } = this.props
-    const { selectedFile, includeAllSeverities } = this.state
-    const fileDetailsClassName = 'flex flex-row justify-center ma2'
-    const fileDetails = this._renderFileDetails(fileDetailsClassName)
-
-    return (
-      React.createElement( 'div', { className: 'flex-column center mw9 pa2' },
-        React.createElement( ToolbarView, {
-          className: 'flex flex-row justify-center', includeAllSeverities: includeAllSeverities, onincludeAllSeveritiesChanged: this._onincludeAllSeveritiesChanged }),
-        React.createElement( FilesView, {
-          className: 'flex flex-row justify-center vh-15 overflow-scroll', selectedFile: selectedFile, groups: groups, includeAllSeverities: includeAllSeverities, onfileClicked: this._onfileClicked }),
-        fileDetails
-      )
-    )
-  }
-
-  _renderFileDetails(className) {
-    const { groups } = this.props
-    const { selectedFile, selectedLocation, includeAllSeverities } = this.state
-    if (selectedFile == null || !groups.has(selectedFile)) {
-      return (
-        React.createElement( 'div', { className: className }, "Please selecte a file in the above table")
-      )
-    }
-    const {
-        ics
-      , icLocations
-      , deopts
-      , deoptLocations
-      , codes
-      , codeLocations
-      , src
-      , relativePath
-    } = groups.get(selectedFile)
-    return (
-      React.createElement( 'div', { className: className },
-        React.createElement( CodeView, {
-          className: 'flex-column vh-85 w-50 overflow-scroll code-view', selectedLocation: selectedLocation, code: src, ics: ics, icLocations: icLocations, deopts: deopts, deoptLocations: deoptLocations, codes: codes, codeLocations: codeLocations, includeAllSeverities: includeAllSeverities, onmarkerClicked: this._onlocationSelected }),
-        React.createElement( SummaryView, {
-          className: 'flex-column vh-85 w-50 overflow-scroll', file: selectedFile, relativePath: relativePath, selectedLocation: selectedLocation, ics: ics, icLocations: icLocations, deopts: deopts, deoptLocations: deoptLocations, codes: codes, codeLocations: codeLocations, includeAllSeverities: includeAllSeverities, onsummaryClicked: this._onlocationSelected })
-      )
-    )
-  }
-
-  _onlocationSelected(id) {
-    this.setState(Object.assign(this.state, { selectedLocation: id }))
-  }
-
-  _onincludeAllSeveritiesChanged(includeAllSeverities) {
-    this.setState(Object.assign(this.state, { includeAllSeverities, selectedLocation: null }))
-  }
-
-  _onfileClicked(file) {
-    this.setState(Object.assign(this.state, { selectedFile: file, selectedLocation: null }))
-  }
-}
-
-async function deoptigateRender(groupedByFile) {
-  try {
-    const groupedByFileAndLocation = deoptigate(groupedByFile)
-
-    render(
-      React.createElement( MainView, { groups: groupedByFileAndLocation })
-    , app()
-    )
-  } catch (err) {
-    console.error(err)
-  }
-}
-
-module.exports = deoptigateRender
-
-},{"../":51,"./components/code":6,"./components/files":7,"./components/summary":8,"./components/toolbar":9,"react":40,"react-dom":20}],11:[function(require,module,exports){
-
-},{}],12:[function(require,module,exports){
-(function (global){
-'use strict';
-
-// compare and isBuffer taken from https://github.com/feross/buffer/blob/680e9e5e488f22aac27599a57dc844a6315928dd/index.js
-// original notice:
-
-/*!
- * The buffer module from node.js, for the browser.
- *
- * @author   Feross Aboukhadijeh <feross@feross.org> <http://feross.org>
- * @license  MIT
- */
-function compare(a, b) {
-  if (a === b) {
-    return 0;
-  }
-
-  var x = a.length;
-  var y = b.length;
-
-  for (var i = 0, len = Math.min(x, y); i < len; ++i) {
-    if (a[i] !== b[i]) {
-      x = a[i];
-      y = b[i];
-      break;
-    }
-  }
-
-  if (x < y) {
-    return -1;
-  }
-  if (y < x) {
-    return 1;
-  }
-  return 0;
-}
-function isBuffer(b) {
-  if (global.Buffer && typeof global.Buffer.isBuffer === 'function') {
-    return global.Buffer.isBuffer(b);
-  }
-  return !!(b != null && b._isBuffer);
-}
-
-// based on node assert, original notice:
-
-// http://wiki.commonjs.org/wiki/Unit_Testing/1.0
-//
-// THIS IS NOT TESTED NOR LIKELY TO WORK OUTSIDE V8!
-//
-// Originally from narwhal.js (http://narwhaljs.org)
-// Copyright (c) 2009 Thomas Robinson <280north.com>
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the 'Software'), to
-// deal in the Software without restriction, including without limitation the
-// rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
-// sell copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
-// ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-// WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-var util = require('util/');
-var hasOwn = Object.prototype.hasOwnProperty;
-var pSlice = Array.prototype.slice;
-var functionsHaveNames = (function () {
-  return function foo() {}.name === 'foo';
-}());
-function pToString (obj) {
-  return Object.prototype.toString.call(obj);
-}
-function isView(arrbuf) {
-  if (isBuffer(arrbuf)) {
-    return false;
-  }
-  if (typeof global.ArrayBuffer !== 'function') {
-    return false;
-  }
-  if (typeof ArrayBuffer.isView === 'function') {
-    return ArrayBuffer.isView(arrbuf);
-  }
-  if (!arrbuf) {
-    return false;
-  }
-  if (arrbuf instanceof DataView) {
-    return true;
-  }
-  if (arrbuf.buffer && arrbuf.buffer instanceof ArrayBuffer) {
-    return true;
-  }
-  return false;
-}
-// 1. The assert module provides functions that throw
-// AssertionError's when particular conditions are not met. The
-// assert module must conform to the following interface.
-
-var assert = module.exports = ok;
-
-// 2. The AssertionError is defined in assert.
-// new assert.AssertionError({ message: message,
-//                             actual: actual,
-//                             expected: expected })
-
-var regex = /\s*function\s+([^\(\s]*)\s*/;
-// based on https://github.com/ljharb/function.prototype.name/blob/adeeeec8bfcc6068b187d7d9fb3d5bb1d3a30899/implementation.js
-function getName(func) {
-  if (!util.isFunction(func)) {
-    return;
-  }
-  if (functionsHaveNames) {
-    return func.name;
-  }
-  var str = func.toString();
-  var match = str.match(regex);
-  return match && match[1];
-}
-assert.AssertionError = function AssertionError(options) {
-  this.name = 'AssertionError';
-  this.actual = options.actual;
-  this.expected = options.expected;
-  this.operator = options.operator;
-  if (options.message) {
-    this.message = options.message;
-    this.generatedMessage = false;
-  } else {
-    this.message = getMessage(this);
-    this.generatedMessage = true;
-  }
-  var stackStartFunction = options.stackStartFunction || fail;
-  if (Error.captureStackTrace) {
-    Error.captureStackTrace(this, stackStartFunction);
-  } else {
-    // non v8 browsers so we can have a stacktrace
-    var err = new Error();
-    if (err.stack) {
-      var out = err.stack;
-
-      // try to strip useless frames
-      var fn_name = getName(stackStartFunction);
-      var idx = out.indexOf('\n' + fn_name);
-      if (idx >= 0) {
-        // once we have located the function frame
-        // we need to strip out everything before it (and its line)
-        var next_line = out.indexOf('\n', idx + 1);
-        out = out.substring(next_line + 1);
-      }
-
-      this.stack = out;
-    }
-  }
-};
-
-// assert.AssertionError instanceof Error
-util.inherits(assert.AssertionError, Error);
-
-function truncate(s, n) {
-  if (typeof s === 'string') {
-    return s.length < n ? s : s.slice(0, n);
-  } else {
-    return s;
-  }
-}
-function inspect(something) {
-  if (functionsHaveNames || !util.isFunction(something)) {
-    return util.inspect(something);
-  }
-  var rawname = getName(something);
-  var name = rawname ? ': ' + rawname : '';
-  return '[Function' +  name + ']';
-}
-function getMessage(self) {
-  return truncate(inspect(self.actual), 128) + ' ' +
-         self.operator + ' ' +
-         truncate(inspect(self.expected), 128);
-}
-
-// At present only the three keys mentioned above are used and
-// understood by the spec. Implementations or sub modules can pass
-// other keys to the AssertionError's constructor - they will be
-// ignored.
-
-// 3. All of the following functions must throw an AssertionError
-// when a corresponding condition is not met, with a message that
-// may be undefined if not provided.  All assertion methods provide
-// both the actual and expected values to the assertion error for
-// display purposes.
-
-function fail(actual, expected, message, operator, stackStartFunction) {
-  throw new assert.AssertionError({
-    message: message,
-    actual: actual,
-    expected: expected,
-    operator: operator,
-    stackStartFunction: stackStartFunction
-  });
-}
-
-// EXTENSION! allows for well behaved errors defined elsewhere.
-assert.fail = fail;
-
-// 4. Pure assertion tests whether a value is truthy, as determined
-// by !!guard.
-// assert.ok(guard, message_opt);
-// This statement is equivalent to assert.equal(true, !!guard,
-// message_opt);. To test strictly for the value true, use
-// assert.strictEqual(true, guard, message_opt);.
-
-function ok(value, message) {
-  if (!value) fail(value, true, message, '==', assert.ok);
-}
-assert.ok = ok;
-
-// 5. The equality assertion tests shallow, coercive equality with
-// ==.
-// assert.equal(actual, expected, message_opt);
-
-assert.equal = function equal(actual, expected, message) {
-  if (actual != expected) fail(actual, expected, message, '==', assert.equal);
-};
-
-// 6. The non-equality assertion tests for whether two objects are not equal
-// with != assert.notEqual(actual, expected, message_opt);
-
-assert.notEqual = function notEqual(actual, expected, message) {
-  if (actual == expected) {
-    fail(actual, expected, message, '!=', assert.notEqual);
-  }
-};
-
-// 7. The equivalence assertion tests a deep equality relation.
-// assert.deepEqual(actual, expected, message_opt);
-
-assert.deepEqual = function deepEqual(actual, expected, message) {
-  if (!_deepEqual(actual, expected, false)) {
-    fail(actual, expected, message, 'deepEqual', assert.deepEqual);
-  }
-};
-
-assert.deepStrictEqual = function deepStrictEqual(actual, expected, message) {
-  if (!_deepEqual(actual, expected, true)) {
-    fail(actual, expected, message, 'deepStrictEqual', assert.deepStrictEqual);
-  }
-};
-
-function _deepEqual(actual, expected, strict, memos) {
-  // 7.1. All identical values are equivalent, as determined by ===.
-  if (actual === expected) {
-    return true;
-  } else if (isBuffer(actual) && isBuffer(expected)) {
-    return compare(actual, expected) === 0;
-
-  // 7.2. If the expected value is a Date object, the actual value is
-  // equivalent if it is also a Date object that refers to the same time.
-  } else if (util.isDate(actual) && util.isDate(expected)) {
-    return actual.getTime() === expected.getTime();
-
-  // 7.3 If the expected value is a RegExp object, the actual value is
-  // equivalent if it is also a RegExp object with the same source and
-  // properties (`global`, `multiline`, `lastIndex`, `ignoreCase`).
-  } else if (util.isRegExp(actual) && util.isRegExp(expected)) {
-    return actual.source === expected.source &&
-           actual.global === expected.global &&
-           actual.multiline === expected.multiline &&
-           actual.lastIndex === expected.lastIndex &&
-           actual.ignoreCase === expected.ignoreCase;
-
-  // 7.4. Other pairs that do not both pass typeof value == 'object',
-  // equivalence is determined by ==.
-  } else if ((actual === null || typeof actual !== 'object') &&
-             (expected === null || typeof expected !== 'object')) {
-    return strict ? actual === expected : actual == expected;
-
-  // If both values are instances of typed arrays, wrap their underlying
-  // ArrayBuffers in a Buffer each to increase performance
-  // This optimization requires the arrays to have the same type as checked by
-  // Object.prototype.toString (aka pToString). Never perform binary
-  // comparisons for Float*Arrays, though, since e.g. +0 === -0 but their
-  // bit patterns are not identical.
-  } else if (isView(actual) && isView(expected) &&
-             pToString(actual) === pToString(expected) &&
-             !(actual instanceof Float32Array ||
-               actual instanceof Float64Array)) {
-    return compare(new Uint8Array(actual.buffer),
-                   new Uint8Array(expected.buffer)) === 0;
-
-  // 7.5 For all other Object pairs, including Array objects, equivalence is
-  // determined by having the same number of owned properties (as verified
-  // with Object.prototype.hasOwnProperty.call), the same set of keys
-  // (although not necessarily the same order), equivalent values for every
-  // corresponding key, and an identical 'prototype' property. Note: this
-  // accounts for both named and indexed properties on Arrays.
-  } else if (isBuffer(actual) !== isBuffer(expected)) {
-    return false;
-  } else {
-    memos = memos || {actual: [], expected: []};
-
-    var actualIndex = memos.actual.indexOf(actual);
-    if (actualIndex !== -1) {
-      if (actualIndex === memos.expected.indexOf(expected)) {
-        return true;
-      }
-    }
-
-    memos.actual.push(actual);
-    memos.expected.push(expected);
-
-    return objEquiv(actual, expected, strict, memos);
-  }
-}
-
-function isArguments(object) {
-  return Object.prototype.toString.call(object) == '[object Arguments]';
-}
-
-function objEquiv(a, b, strict, actualVisitedObjects) {
-  if (a === null || a === undefined || b === null || b === undefined)
-    return false;
-  // if one is a primitive, the other must be same
-  if (util.isPrimitive(a) || util.isPrimitive(b))
-    return a === b;
-  if (strict && Object.getPrototypeOf(a) !== Object.getPrototypeOf(b))
-    return false;
-  var aIsArgs = isArguments(a);
-  var bIsArgs = isArguments(b);
-  if ((aIsArgs && !bIsArgs) || (!aIsArgs && bIsArgs))
-    return false;
-  if (aIsArgs) {
-    a = pSlice.call(a);
-    b = pSlice.call(b);
-    return _deepEqual(a, b, strict);
-  }
-  var ka = objectKeys(a);
-  var kb = objectKeys(b);
-  var key, i;
-  // having the same number of owned properties (keys incorporates
-  // hasOwnProperty)
-  if (ka.length !== kb.length)
-    return false;
-  //the same set of keys (although not necessarily the same order),
-  ka.sort();
-  kb.sort();
-  //~~~cheap key test
-  for (i = ka.length - 1; i >= 0; i--) {
-    if (ka[i] !== kb[i])
-      return false;
-  }
-  //equivalent values for every corresponding key, and
-  //~~~possibly expensive deep test
-  for (i = ka.length - 1; i >= 0; i--) {
-    key = ka[i];
-    if (!_deepEqual(a[key], b[key], strict, actualVisitedObjects))
-      return false;
-  }
-  return true;
-}
-
-// 8. The non-equivalence assertion tests for any deep inequality.
-// assert.notDeepEqual(actual, expected, message_opt);
-
-assert.notDeepEqual = function notDeepEqual(actual, expected, message) {
-  if (_deepEqual(actual, expected, false)) {
-    fail(actual, expected, message, 'notDeepEqual', assert.notDeepEqual);
-  }
-};
-
-assert.notDeepStrictEqual = notDeepStrictEqual;
-function notDeepStrictEqual(actual, expected, message) {
-  if (_deepEqual(actual, expected, true)) {
-    fail(actual, expected, message, 'notDeepStrictEqual', notDeepStrictEqual);
-  }
-}
-
-
-// 9. The strict equality assertion tests strict equality, as determined by ===.
-// assert.strictEqual(actual, expected, message_opt);
-
-assert.strictEqual = function strictEqual(actual, expected, message) {
-  if (actual !== expected) {
-    fail(actual, expected, message, '===', assert.strictEqual);
-  }
-};
-
-// 10. The strict non-equality assertion tests for strict inequality, as
-// determined by !==.  assert.notStrictEqual(actual, expected, message_opt);
-
-assert.notStrictEqual = function notStrictEqual(actual, expected, message) {
-  if (actual === expected) {
-    fail(actual, expected, message, '!==', assert.notStrictEqual);
-  }
-};
-
-function expectedException(actual, expected) {
-  if (!actual || !expected) {
-    return false;
-  }
-
-  if (Object.prototype.toString.call(expected) == '[object RegExp]') {
-    return expected.test(actual);
-  }
-
-  try {
-    if (actual instanceof expected) {
-      return true;
-    }
-  } catch (e) {
-    // Ignore.  The instanceof check doesn't work for arrow functions.
-  }
-
-  if (Error.isPrototypeOf(expected)) {
-    return false;
-  }
-
-  return expected.call({}, actual) === true;
-}
-
-function _tryBlock(block) {
-  var error;
-  try {
-    block();
-  } catch (e) {
-    error = e;
-  }
-  return error;
-}
-
-function _throws(shouldThrow, block, expected, message) {
-  var actual;
-
-  if (typeof block !== 'function') {
-    throw new TypeError('"block" argument must be a function');
-  }
-
-  if (typeof expected === 'string') {
-    message = expected;
-    expected = null;
-  }
-
-  actual = _tryBlock(block);
-
-  message = (expected && expected.name ? ' (' + expected.name + ').' : '.') +
-            (message ? ' ' + message : '.');
-
-  if (shouldThrow && !actual) {
-    fail(actual, expected, 'Missing expected exception' + message);
-  }
-
-  var userProvidedMessage = typeof message === 'string';
-  var isUnwantedException = !shouldThrow && util.isError(actual);
-  var isUnexpectedException = !shouldThrow && actual && !expected;
-
-  if ((isUnwantedException &&
-      userProvidedMessage &&
-      expectedException(actual, expected)) ||
-      isUnexpectedException) {
-    fail(actual, expected, 'Got unwanted exception' + message);
-  }
-
-  if ((shouldThrow && actual && expected &&
-      !expectedException(actual, expected)) || (!shouldThrow && actual)) {
-    throw actual;
-  }
-}
-
-// 11. Expected to throw an error:
-// assert.throws(block, Error_opt, message_opt);
-
-assert.throws = function(block, /*optional*/error, /*optional*/message) {
-  _throws(true, block, error, message);
-};
-
-// EXTENSION! This is annoying to write outside this module.
-assert.doesNotThrow = function(block, /*optional*/error, /*optional*/message) {
-  _throws(false, block, error, message);
-};
-
-assert.ifError = function(err) { if (err) throw err; };
-
-var objectKeys = Object.keys || function (obj) {
-  var keys = [];
-  for (var key in obj) {
-    if (hasOwn.call(obj, key)) keys.push(key);
-  }
-  return keys;
-};
-
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"util/":17}],13:[function(require,module,exports){
+},{"../spans":15}],17:[function(require,module,exports){
 (function (process){
-// Copyright Joyent, Inc. and other Node contributors.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a
-// copy of this software and associated documentation files (the
-// "Software"), to deal in the Software without restriction, including
-// without limitation the rights to use, copy, modify, merge, publish,
-// distribute, sublicense, and/or sell copies of the Software, and to permit
-// persons to whom the Software is furnished to do so, subject to the
-// following conditions:
-//
-// The above copyright notice and this permission notice shall be included
-// in all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
-// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
-// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
-// USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-// resolves . and .. elements in a path array with directory names there
-// must be no slashes, empty elements, or device names (c:\) in the array
-// (so also no leading and trailing slashes - it does not distinguish
-// relative and absolute paths)
-function normalizeArray(parts, allowAboveRoot) {
-  // if the path tries to go above the root, `up` ends up > 0
-  var up = 0;
-  for (var i = parts.length - 1; i >= 0; i--) {
-    var last = parts[i];
-    if (last === '.') {
-      parts.splice(i, 1);
-    } else if (last === '..') {
-      parts.splice(i, 1);
-      up++;
-    } else if (up) {
-      parts.splice(i, 1);
-      up--;
-    }
-  }
-
-  // if the path is allowed to go above the root, restore leading ..s
-  if (allowAboveRoot) {
-    for (; up--; up) {
-      parts.unshift('..');
-    }
-  }
-
-  return parts;
-}
-
-// Split a filename into [root, dir, basename, ext], unix version
-// 'root' is just a slash, or nothing.
-var splitPathRe =
-    /^(\/?|)([\s\S]*?)((?:\.{1,2}|[^\/]+?|)(\.[^.\/]*|))(?:[\/]*)$/;
-var splitPath = function(filename) {
-  return splitPathRe.exec(filename).slice(1);
-};
-
-// path.resolve([from ...], to)
-// posix version
-exports.resolve = function() {
-  var resolvedPath = '',
-      resolvedAbsolute = false;
-
-  for (var i = arguments.length - 1; i >= -1 && !resolvedAbsolute; i--) {
-    var path = (i >= 0) ? arguments[i] : process.cwd();
-
-    // Skip empty and invalid entries
-    if (typeof path !== 'string') {
-      throw new TypeError('Arguments to path.resolve must be strings');
-    } else if (!path) {
-      continue;
-    }
-
-    resolvedPath = path + '/' + resolvedPath;
-    resolvedAbsolute = path.charAt(0) === '/';
-  }
-
-  // At this point the path should be resolved to a full absolute path, but
-  // handle relative paths to be safe (might happen when process.cwd() fails)
-
-  // Normalize the path
-  resolvedPath = normalizeArray(filter(resolvedPath.split('/'), function(p) {
-    return !!p;
-  }), !resolvedAbsolute).join('/');
-
-  return ((resolvedAbsolute ? '/' : '') + resolvedPath) || '.';
-};
-
-// path.normalize(path)
-// posix version
-exports.normalize = function(path) {
-  var isAbsolute = exports.isAbsolute(path),
-      trailingSlash = substr(path, -1) === '/';
-
-  // Normalize the path
-  path = normalizeArray(filter(path.split('/'), function(p) {
-    return !!p;
-  }), !isAbsolute).join('/');
-
-  if (!path && !isAbsolute) {
-    path = '.';
-  }
-  if (path && trailingSlash) {
-    path += '/';
-  }
-
-  return (isAbsolute ? '/' : '') + path;
-};
-
-// posix version
-exports.isAbsolute = function(path) {
-  return path.charAt(0) === '/';
-};
-
-// posix version
-exports.join = function() {
-  var paths = Array.prototype.slice.call(arguments, 0);
-  return exports.normalize(filter(paths, function(p, index) {
-    if (typeof p !== 'string') {
-      throw new TypeError('Arguments to path.join must be strings');
-    }
-    return p;
-  }).join('/'));
-};
-
-
-// path.relative(from, to)
-// posix version
-exports.relative = function(from, to) {
-  from = exports.resolve(from).substr(1);
-  to = exports.resolve(to).substr(1);
-
-  function trim(arr) {
-    var start = 0;
-    for (; start < arr.length; start++) {
-      if (arr[start] !== '') break;
-    }
-
-    var end = arr.length - 1;
-    for (; end >= 0; end--) {
-      if (arr[end] !== '') break;
-    }
-
-    if (start > end) return [];
-    return arr.slice(start, end - start + 1);
-  }
-
-  var fromParts = trim(from.split('/'));
-  var toParts = trim(to.split('/'));
-
-  var length = Math.min(fromParts.length, toParts.length);
-  var samePartsLength = length;
-  for (var i = 0; i < length; i++) {
-    if (fromParts[i] !== toParts[i]) {
-      samePartsLength = i;
-      break;
-    }
-  }
-
-  var outputParts = [];
-  for (var i = samePartsLength; i < fromParts.length; i++) {
-    outputParts.push('..');
-  }
-
-  outputParts = outputParts.concat(toParts.slice(samePartsLength));
-
-  return outputParts.join('/');
-};
-
-exports.sep = '/';
-exports.delimiter = ':';
-
-exports.dirname = function(path) {
-  var result = splitPath(path),
-      root = result[0],
-      dir = result[1];
-
-  if (!root && !dir) {
-    // No dirname whatsoever
-    return '.';
-  }
-
-  if (dir) {
-    // It has a dirname, strip trailing slash
-    dir = dir.substr(0, dir.length - 1);
-  }
-
-  return root + dir;
-};
-
-
-exports.basename = function(path, ext) {
-  var f = splitPath(path)[2];
-  // TODO: make this comparison case-insensitive on windows?
-  if (ext && f.substr(-1 * ext.length) === ext) {
-    f = f.substr(0, f.length - ext.length);
-  }
-  return f;
-};
-
-
-exports.extname = function(path) {
-  return splitPath(path)[3];
-};
-
-function filter (xs, f) {
-    if (xs.filter) return xs.filter(f);
-    var res = [];
-    for (var i = 0; i < xs.length; i++) {
-        if (f(xs[i], i, xs)) res.push(xs[i]);
-    }
-    return res;
-}
-
-// String.prototype.substr - negative index don't work in IE8
-var substr = 'ab'.substr(-1) === 'b'
-    ? function (str, start, len) { return str.substr(start, len) }
-    : function (str, start, len) {
-        if (start < 0) start = str.length + start;
-        return str.substr(start, len);
-    }
-;
-
-}).call(this,require('_process'))
-},{"_process":14}],14:[function(require,module,exports){
-// shim for using process in browser
-var process = module.exports = {};
-
-// cached from whatever global is present so that test runners that stub it
-// don't break things.  But we need to wrap it in a try catch in case it is
-// wrapped in strict mode code which doesn't define any globals.  It's inside a
-// function because try/catches deoptimize in certain engines.
-
-var cachedSetTimeout;
-var cachedClearTimeout;
-
-function defaultSetTimout() {
-    throw new Error('setTimeout has not been defined');
-}
-function defaultClearTimeout () {
-    throw new Error('clearTimeout has not been defined');
-}
-(function () {
-    try {
-        if (typeof setTimeout === 'function') {
-            cachedSetTimeout = setTimeout;
-        } else {
-            cachedSetTimeout = defaultSetTimout;
-        }
-    } catch (e) {
-        cachedSetTimeout = defaultSetTimout;
-    }
-    try {
-        if (typeof clearTimeout === 'function') {
-            cachedClearTimeout = clearTimeout;
-        } else {
-            cachedClearTimeout = defaultClearTimeout;
-        }
-    } catch (e) {
-        cachedClearTimeout = defaultClearTimeout;
-    }
-} ())
-function runTimeout(fun) {
-    if (cachedSetTimeout === setTimeout) {
-        //normal enviroments in sane situations
-        return setTimeout(fun, 0);
-    }
-    // if setTimeout wasn't available but was latter defined
-    if ((cachedSetTimeout === defaultSetTimout || !cachedSetTimeout) && setTimeout) {
-        cachedSetTimeout = setTimeout;
-        return setTimeout(fun, 0);
-    }
-    try {
-        // when when somebody has screwed with setTimeout but no I.E. maddness
-        return cachedSetTimeout(fun, 0);
-    } catch(e){
-        try {
-            // When we are in I.E. but the script has been evaled so I.E. doesn't trust the global object when called normally
-            return cachedSetTimeout.call(null, fun, 0);
-        } catch(e){
-            // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error
-            return cachedSetTimeout.call(this, fun, 0);
-        }
-    }
-
-
-}
-function runClearTimeout(marker) {
-    if (cachedClearTimeout === clearTimeout) {
-        //normal enviroments in sane situations
-        return clearTimeout(marker);
-    }
-    // if clearTimeout wasn't available but was latter defined
-    if ((cachedClearTimeout === defaultClearTimeout || !cachedClearTimeout) && clearTimeout) {
-        cachedClearTimeout = clearTimeout;
-        return clearTimeout(marker);
-    }
-    try {
-        // when when somebody has screwed with setTimeout but no I.E. maddness
-        return cachedClearTimeout(marker);
-    } catch (e){
-        try {
-            // When we are in I.E. but the script has been evaled so I.E. doesn't  trust the global object when called normally
-            return cachedClearTimeout.call(null, marker);
-        } catch (e){
-            // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error.
-            // Some versions of I.E. have different rules for clearTimeout vs setTimeout
-            return cachedClearTimeout.call(this, marker);
-        }
-    }
-
-
-
-}
-var queue = [];
-var draining = false;
-var currentQueue;
-var queueIndex = -1;
-
-function cleanUpNextTick() {
-    if (!draining || !currentQueue) {
-        return;
-    }
-    draining = false;
-    if (currentQueue.length) {
-        queue = currentQueue.concat(queue);
-    } else {
-        queueIndex = -1;
-    }
-    if (queue.length) {
-        drainQueue();
-    }
-}
-
-function drainQueue() {
-    if (draining) {
-        return;
-    }
-    var timeout = runTimeout(cleanUpNextTick);
-    draining = true;
-
-    var len = queue.length;
-    while(len) {
-        currentQueue = queue;
-        queue = [];
-        while (++queueIndex < len) {
-            if (currentQueue) {
-                currentQueue[queueIndex].run();
-            }
-        }
-        queueIndex = -1;
-        len = queue.length;
-    }
-    currentQueue = null;
-    draining = false;
-    runClearTimeout(timeout);
-}
-
-process.nextTick = function (fun) {
-    var args = new Array(arguments.length - 1);
-    if (arguments.length > 1) {
-        for (var i = 1; i < arguments.length; i++) {
-            args[i - 1] = arguments[i];
-        }
-    }
-    queue.push(new Item(fun, args));
-    if (queue.length === 1 && !draining) {
-        runTimeout(drainQueue);
-    }
-};
-
-// v8 likes predictible objects
-function Item(fun, array) {
-    this.fun = fun;
-    this.array = array;
-}
-Item.prototype.run = function () {
-    this.fun.apply(null, this.array);
-};
-process.title = 'browser';
-process.browser = true;
-process.env = {};
-process.argv = [];
-process.version = ''; // empty string to avoid regexp issues
-process.versions = {};
-
-function noop() {}
-
-process.on = noop;
-process.addListener = noop;
-process.once = noop;
-process.off = noop;
-process.removeListener = noop;
-process.removeAllListeners = noop;
-process.emit = noop;
-process.prependListener = noop;
-process.prependOnceListener = noop;
-
-process.listeners = function (name) { return [] }
-
-process.binding = function (name) {
-    throw new Error('process.binding is not supported');
-};
-
-process.cwd = function () { return '/' };
-process.chdir = function (dir) {
-    throw new Error('process.chdir is not supported');
-};
-process.umask = function() { return 0; };
-
-},{}],15:[function(require,module,exports){
-if (typeof Object.create === 'function') {
-  // implementation from standard node.js 'util' module
-  module.exports = function inherits(ctor, superCtor) {
-    ctor.super_ = superCtor
-    ctor.prototype = Object.create(superCtor.prototype, {
-      constructor: {
-        value: ctor,
-        enumerable: false,
-        writable: true,
-        configurable: true
-      }
-    });
-  };
-} else {
-  // old school shim for old browsers
-  module.exports = function inherits(ctor, superCtor) {
-    ctor.super_ = superCtor
-    var TempCtor = function () {}
-    TempCtor.prototype = superCtor.prototype
-    ctor.prototype = new TempCtor()
-    ctor.prototype.constructor = ctor
-  }
-}
-
-},{}],16:[function(require,module,exports){
-module.exports = function isBuffer(arg) {
-  return arg && typeof arg === 'object'
-    && typeof arg.copy === 'function'
-    && typeof arg.fill === 'function'
-    && typeof arg.readUInt8 === 'function';
-}
-},{}],17:[function(require,module,exports){
-(function (process,global){
-// Copyright Joyent, Inc. and other Node contributors.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a
-// copy of this software and associated documentation files (the
-// "Software"), to deal in the Software without restriction, including
-// without limitation the rights to use, copy, modify, merge, publish,
-// distribute, sublicense, and/or sell copies of the Software, and to permit
-// persons to whom the Software is furnished to do so, subject to the
-// following conditions:
-//
-// The above copyright notice and this permission notice shall be included
-// in all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
-// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
-// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
-// USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-var formatRegExp = /%[sdj%]/g;
-exports.format = function(f) {
-  if (!isString(f)) {
-    var objects = [];
-    for (var i = 0; i < arguments.length; i++) {
-      objects.push(inspect(arguments[i]));
-    }
-    return objects.join(' ');
-  }
-
-  var i = 1;
-  var args = arguments;
-  var len = args.length;
-  var str = String(f).replace(formatRegExp, function(x) {
-    if (x === '%%') return '%';
-    if (i >= len) return x;
-    switch (x) {
-      case '%s': return String(args[i++]);
-      case '%d': return Number(args[i++]);
-      case '%j':
-        try {
-          return JSON.stringify(args[i++]);
-        } catch (_) {
-          return '[Circular]';
-        }
-      default:
-        return x;
-    }
-  });
-  for (var x = args[i]; i < len; x = args[++i]) {
-    if (isNull(x) || !isObject(x)) {
-      str += ' ' + x;
-    } else {
-      str += ' ' + inspect(x);
-    }
-  }
-  return str;
-};
-
-
-// Mark that a method should not be used.
-// Returns a modified function which warns once by default.
-// If --no-deprecation is set, then it is a no-op.
-exports.deprecate = function(fn, msg) {
-  // Allow for deprecating things in the process of starting up.
-  if (isUndefined(global.process)) {
-    return function() {
-      return exports.deprecate(fn, msg).apply(this, arguments);
-    };
-  }
-
-  if (process.noDeprecation === true) {
-    return fn;
-  }
-
-  var warned = false;
-  function deprecated() {
-    if (!warned) {
-      if (process.throwDeprecation) {
-        throw new Error(msg);
-      } else if (process.traceDeprecation) {
-        console.trace(msg);
-      } else {
-        console.error(msg);
-      }
-      warned = true;
-    }
-    return fn.apply(this, arguments);
-  }
-
-  return deprecated;
-};
-
-
-var debugs = {};
-var debugEnviron;
-exports.debuglog = function(set) {
-  if (isUndefined(debugEnviron))
-    debugEnviron = process.env.NODE_DEBUG || '';
-  set = set.toUpperCase();
-  if (!debugs[set]) {
-    if (new RegExp('\\b' + set + '\\b', 'i').test(debugEnviron)) {
-      var pid = process.pid;
-      debugs[set] = function() {
-        var msg = exports.format.apply(exports, arguments);
-        console.error('%s %d: %s', set, pid, msg);
-      };
-    } else {
-      debugs[set] = function() {};
-    }
-  }
-  return debugs[set];
-};
-
-
-/**
- * Echos the value of a value. Trys to print the value out
- * in the best way possible given the different types.
- *
- * @param {Object} obj The object to print out.
- * @param {Object} opts Optional options object that alters the output.
- */
-/* legacy: obj, showHidden, depth, colors*/
-function inspect(obj, opts) {
-  // default options
-  var ctx = {
-    seen: [],
-    stylize: stylizeNoColor
-  };
-  // legacy...
-  if (arguments.length >= 3) ctx.depth = arguments[2];
-  if (arguments.length >= 4) ctx.colors = arguments[3];
-  if (isBoolean(opts)) {
-    // legacy...
-    ctx.showHidden = opts;
-  } else if (opts) {
-    // got an "options" object
-    exports._extend(ctx, opts);
-  }
-  // set default options
-  if (isUndefined(ctx.showHidden)) ctx.showHidden = false;
-  if (isUndefined(ctx.depth)) ctx.depth = 2;
-  if (isUndefined(ctx.colors)) ctx.colors = false;
-  if (isUndefined(ctx.customInspect)) ctx.customInspect = true;
-  if (ctx.colors) ctx.stylize = stylizeWithColor;
-  return formatValue(ctx, obj, ctx.depth);
-}
-exports.inspect = inspect;
-
-
-// http://en.wikipedia.org/wiki/ANSI_escape_code#graphics
-inspect.colors = {
-  'bold' : [1, 22],
-  'italic' : [3, 23],
-  'underline' : [4, 24],
-  'inverse' : [7, 27],
-  'white' : [37, 39],
-  'grey' : [90, 39],
-  'black' : [30, 39],
-  'blue' : [34, 39],
-  'cyan' : [36, 39],
-  'green' : [32, 39],
-  'magenta' : [35, 39],
-  'red' : [31, 39],
-  'yellow' : [33, 39]
-};
-
-// Don't use 'blue' not visible on cmd.exe
-inspect.styles = {
-  'special': 'cyan',
-  'number': 'yellow',
-  'boolean': 'yellow',
-  'undefined': 'grey',
-  'null': 'bold',
-  'string': 'green',
-  'date': 'magenta',
-  // "name": intentionally not styling
-  'regexp': 'red'
-};
-
-
-function stylizeWithColor(str, styleType) {
-  var style = inspect.styles[styleType];
-
-  if (style) {
-    return '\u001b[' + inspect.colors[style][0] + 'm' + str +
-           '\u001b[' + inspect.colors[style][1] + 'm';
-  } else {
-    return str;
-  }
-}
-
-
-function stylizeNoColor(str, styleType) {
-  return str;
-}
-
-
-function arrayToHash(array) {
-  var hash = {};
-
-  array.forEach(function(val, idx) {
-    hash[val] = true;
-  });
-
-  return hash;
-}
-
-
-function formatValue(ctx, value, recurseTimes) {
-  // Provide a hook for user-specified inspect functions.
-  // Check that value is an object with an inspect function on it
-  if (ctx.customInspect &&
-      value &&
-      isFunction(value.inspect) &&
-      // Filter out the util module, it's inspect function is special
-      value.inspect !== exports.inspect &&
-      // Also filter out any prototype objects using the circular check.
-      !(value.constructor && value.constructor.prototype === value)) {
-    var ret = value.inspect(recurseTimes, ctx);
-    if (!isString(ret)) {
-      ret = formatValue(ctx, ret, recurseTimes);
-    }
-    return ret;
-  }
-
-  // Primitive types cannot have properties
-  var primitive = formatPrimitive(ctx, value);
-  if (primitive) {
-    return primitive;
-  }
-
-  // Look up the keys of the object.
-  var keys = Object.keys(value);
-  var visibleKeys = arrayToHash(keys);
-
-  if (ctx.showHidden) {
-    keys = Object.getOwnPropertyNames(value);
-  }
-
-  // IE doesn't make error fields non-enumerable
-  // http://msdn.microsoft.com/en-us/library/ie/dww52sbt(v=vs.94).aspx
-  if (isError(value)
-      && (keys.indexOf('message') >= 0 || keys.indexOf('description') >= 0)) {
-    return formatError(value);
-  }
-
-  // Some type of object without properties can be shortcutted.
-  if (keys.length === 0) {
-    if (isFunction(value)) {
-      var name = value.name ? ': ' + value.name : '';
-      return ctx.stylize('[Function' + name + ']', 'special');
-    }
-    if (isRegExp(value)) {
-      return ctx.stylize(RegExp.prototype.toString.call(value), 'regexp');
-    }
-    if (isDate(value)) {
-      return ctx.stylize(Date.prototype.toString.call(value), 'date');
-    }
-    if (isError(value)) {
-      return formatError(value);
-    }
-  }
-
-  var base = '', array = false, braces = ['{', '}'];
-
-  // Make Array say that they are Array
-  if (isArray(value)) {
-    array = true;
-    braces = ['[', ']'];
-  }
-
-  // Make functions say that they are functions
-  if (isFunction(value)) {
-    var n = value.name ? ': ' + value.name : '';
-    base = ' [Function' + n + ']';
-  }
-
-  // Make RegExps say that they are RegExps
-  if (isRegExp(value)) {
-    base = ' ' + RegExp.prototype.toString.call(value);
-  }
-
-  // Make dates with properties first say the date
-  if (isDate(value)) {
-    base = ' ' + Date.prototype.toUTCString.call(value);
-  }
-
-  // Make error with message first say the error
-  if (isError(value)) {
-    base = ' ' + formatError(value);
-  }
-
-  if (keys.length === 0 && (!array || value.length == 0)) {
-    return braces[0] + base + braces[1];
-  }
-
-  if (recurseTimes < 0) {
-    if (isRegExp(value)) {
-      return ctx.stylize(RegExp.prototype.toString.call(value), 'regexp');
-    } else {
-      return ctx.stylize('[Object]', 'special');
-    }
-  }
-
-  ctx.seen.push(value);
-
-  var output;
-  if (array) {
-    output = formatArray(ctx, value, recurseTimes, visibleKeys, keys);
-  } else {
-    output = keys.map(function(key) {
-      return formatProperty(ctx, value, recurseTimes, visibleKeys, key, array);
-    });
-  }
-
-  ctx.seen.pop();
-
-  return reduceToSingleString(output, base, braces);
-}
-
-
-function formatPrimitive(ctx, value) {
-  if (isUndefined(value))
-    return ctx.stylize('undefined', 'undefined');
-  if (isString(value)) {
-    var simple = '\'' + JSON.stringify(value).replace(/^"|"$/g, '')
-                                             .replace(/'/g, "\\'")
-                                             .replace(/\\"/g, '"') + '\'';
-    return ctx.stylize(simple, 'string');
-  }
-  if (isNumber(value))
-    return ctx.stylize('' + value, 'number');
-  if (isBoolean(value))
-    return ctx.stylize('' + value, 'boolean');
-  // For some reason typeof null is "object", so special case here.
-  if (isNull(value))
-    return ctx.stylize('null', 'null');
-}
-
-
-function formatError(value) {
-  return '[' + Error.prototype.toString.call(value) + ']';
-}
-
-
-function formatArray(ctx, value, recurseTimes, visibleKeys, keys) {
-  var output = [];
-  for (var i = 0, l = value.length; i < l; ++i) {
-    if (hasOwnProperty(value, String(i))) {
-      output.push(formatProperty(ctx, value, recurseTimes, visibleKeys,
-          String(i), true));
-    } else {
-      output.push('');
-    }
-  }
-  keys.forEach(function(key) {
-    if (!key.match(/^\d+$/)) {
-      output.push(formatProperty(ctx, value, recurseTimes, visibleKeys,
-          key, true));
-    }
-  });
-  return output;
-}
-
-
-function formatProperty(ctx, value, recurseTimes, visibleKeys, key, array) {
-  var name, str, desc;
-  desc = Object.getOwnPropertyDescriptor(value, key) || { value: value[key] };
-  if (desc.get) {
-    if (desc.set) {
-      str = ctx.stylize('[Getter/Setter]', 'special');
-    } else {
-      str = ctx.stylize('[Getter]', 'special');
-    }
-  } else {
-    if (desc.set) {
-      str = ctx.stylize('[Setter]', 'special');
-    }
-  }
-  if (!hasOwnProperty(visibleKeys, key)) {
-    name = '[' + key + ']';
-  }
-  if (!str) {
-    if (ctx.seen.indexOf(desc.value) < 0) {
-      if (isNull(recurseTimes)) {
-        str = formatValue(ctx, desc.value, null);
-      } else {
-        str = formatValue(ctx, desc.value, recurseTimes - 1);
-      }
-      if (str.indexOf('\n') > -1) {
-        if (array) {
-          str = str.split('\n').map(function(line) {
-            return '  ' + line;
-          }).join('\n').substr(2);
-        } else {
-          str = '\n' + str.split('\n').map(function(line) {
-            return '   ' + line;
-          }).join('\n');
-        }
-      }
-    } else {
-      str = ctx.stylize('[Circular]', 'special');
-    }
-  }
-  if (isUndefined(name)) {
-    if (array && key.match(/^\d+$/)) {
-      return str;
-    }
-    name = JSON.stringify('' + key);
-    if (name.match(/^"([a-zA-Z_][a-zA-Z_0-9]*)"$/)) {
-      name = name.substr(1, name.length - 2);
-      name = ctx.stylize(name, 'name');
-    } else {
-      name = name.replace(/'/g, "\\'")
-                 .replace(/\\"/g, '"')
-                 .replace(/(^"|"$)/g, "'");
-      name = ctx.stylize(name, 'string');
-    }
-  }
-
-  return name + ': ' + str;
-}
-
-
-function reduceToSingleString(output, base, braces) {
-  var numLinesEst = 0;
-  var length = output.reduce(function(prev, cur) {
-    numLinesEst++;
-    if (cur.indexOf('\n') >= 0) numLinesEst++;
-    return prev + cur.replace(/\u001b\[\d\d?m/g, '').length + 1;
-  }, 0);
-
-  if (length > 60) {
-    return braces[0] +
-           (base === '' ? '' : base + '\n ') +
-           ' ' +
-           output.join(',\n  ') +
-           ' ' +
-           braces[1];
-  }
-
-  return braces[0] + base + ' ' + output.join(', ') + ' ' + braces[1];
-}
-
-
-// NOTE: These type checking functions intentionally don't use `instanceof`
-// because it is fragile and can be easily faked with `Object.create()`.
-function isArray(ar) {
-  return Array.isArray(ar);
-}
-exports.isArray = isArray;
-
-function isBoolean(arg) {
-  return typeof arg === 'boolean';
-}
-exports.isBoolean = isBoolean;
-
-function isNull(arg) {
-  return arg === null;
-}
-exports.isNull = isNull;
-
-function isNullOrUndefined(arg) {
-  return arg == null;
-}
-exports.isNullOrUndefined = isNullOrUndefined;
-
-function isNumber(arg) {
-  return typeof arg === 'number';
-}
-exports.isNumber = isNumber;
-
-function isString(arg) {
-  return typeof arg === 'string';
-}
-exports.isString = isString;
-
-function isSymbol(arg) {
-  return typeof arg === 'symbol';
-}
-exports.isSymbol = isSymbol;
-
-function isUndefined(arg) {
-  return arg === void 0;
-}
-exports.isUndefined = isUndefined;
-
-function isRegExp(re) {
-  return isObject(re) && objectToString(re) === '[object RegExp]';
-}
-exports.isRegExp = isRegExp;
-
-function isObject(arg) {
-  return typeof arg === 'object' && arg !== null;
-}
-exports.isObject = isObject;
-
-function isDate(d) {
-  return isObject(d) && objectToString(d) === '[object Date]';
-}
-exports.isDate = isDate;
-
-function isError(e) {
-  return isObject(e) &&
-      (objectToString(e) === '[object Error]' || e instanceof Error);
-}
-exports.isError = isError;
-
-function isFunction(arg) {
-  return typeof arg === 'function';
-}
-exports.isFunction = isFunction;
-
-function isPrimitive(arg) {
-  return arg === null ||
-         typeof arg === 'boolean' ||
-         typeof arg === 'number' ||
-         typeof arg === 'string' ||
-         typeof arg === 'symbol' ||  // ES6 symbol
-         typeof arg === 'undefined';
-}
-exports.isPrimitive = isPrimitive;
-
-exports.isBuffer = require('./support/isBuffer');
-
-function objectToString(o) {
-  return Object.prototype.toString.call(o);
-}
-
-
-function pad(n) {
-  return n < 10 ? '0' + n.toString(10) : n.toString(10);
-}
-
-
-var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep',
-              'Oct', 'Nov', 'Dec'];
-
-// 26 Feb 16:19:34
-function timestamp() {
-  var d = new Date();
-  var time = [pad(d.getHours()),
-              pad(d.getMinutes()),
-              pad(d.getSeconds())].join(':');
-  return [d.getDate(), months[d.getMonth()], time].join(' ');
-}
-
-
-// log is just a thin wrapper to console.log that prepends a timestamp
-exports.log = function() {
-  console.log('%s - %s', timestamp(), exports.format.apply(exports, arguments));
-};
-
-
-/**
- * Inherit the prototype methods from one constructor into another.
- *
- * The Function.prototype.inherits from lang.js rewritten as a standalone
- * function (not on Function.prototype). NOTE: If this file is to be loaded
- * during bootstrapping this function needs to be rewritten using some native
- * functions as prototype setup using normal JavaScript does not work as
- * expected during bootstrapping (see mirror.js in r114903).
- *
- * @param {function} ctor Constructor function which needs to inherit the
- *     prototype.
- * @param {function} superCtor Constructor function to inherit prototype from.
- */
-exports.inherits = require('inherits');
-
-exports._extend = function(origin, add) {
-  // Don't do anything if add isn't an object
-  if (!add || !isObject(add)) return origin;
-
-  var keys = Object.keys(add);
-  var i = keys.length;
-  while (i--) {
-    origin[keys[i]] = add[keys[i]];
-  }
-  return origin;
-};
-
-function hasOwnProperty(obj, prop) {
-  return Object.prototype.hasOwnProperty.call(obj, prop);
-}
-
-}).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./support/isBuffer":16,"_process":14,"inherits":15}],18:[function(require,module,exports){
-(function (process){
-/** @license React v16.3.2
+/** @license React v16.3.3
  * react-dom.development.js
  *
  * Copyright (c) 2013-present, Facebook, Inc.
@@ -22482,7 +22592,7 @@ implementation) {
 
 // TODO: this is special because it gets imported during build.
 
-var ReactVersion = '16.3.2';
+var ReactVersion = '16.3.3';
 
 // a requestAnimationFrame, storing the time for the start of the frame, then
 // scheduling a postMessage which gets scheduled after paint. Within the
@@ -26267,8 +26377,8 @@ module.exports = reactDom;
 }
 
 }).call(this,require('_process'))
-},{"_process":14,"fbjs/lib/ExecutionEnvironment":21,"fbjs/lib/camelizeStyleName":23,"fbjs/lib/containsNode":24,"fbjs/lib/emptyFunction":25,"fbjs/lib/emptyObject":26,"fbjs/lib/getActiveElement":27,"fbjs/lib/hyphenateStyleName":29,"fbjs/lib/invariant":30,"fbjs/lib/shallowEqual":33,"fbjs/lib/warning":34,"object-assign":35,"prop-types/checkPropTypes":36,"react":40}],19:[function(require,module,exports){
-/** @license React v16.3.2
+},{"_process":11,"fbjs/lib/ExecutionEnvironment":20,"fbjs/lib/camelizeStyleName":22,"fbjs/lib/containsNode":23,"fbjs/lib/emptyFunction":24,"fbjs/lib/emptyObject":25,"fbjs/lib/getActiveElement":26,"fbjs/lib/hyphenateStyleName":28,"fbjs/lib/invariant":29,"fbjs/lib/shallowEqual":32,"fbjs/lib/warning":33,"object-assign":34,"prop-types/checkPropTypes":35,"react":39}],18:[function(require,module,exports){
+/** @license React v16.3.3
  * react-dom.production.min.js
  *
  * Copyright (c) 2013-present, Facebook, Inc.
@@ -26513,9 +26623,9 @@ function Eg(a,b,c,d,e){ug(c)?void 0:D("200");var f=c._reactRootContainer;if(f){i
 function Fg(a,b){var c=2<arguments.length&&void 0!==arguments[2]?arguments[2]:null;ug(b)?void 0:D("200");return qf(a,b,null,c)}
 var Gg={createPortal:Fg,findDOMNode:function(a){return null==a?null:1===a.nodeType?a:X.findHostInstance(a)},hydrate:function(a,b,c){return Eg(null,a,b,!0,c)},render:function(a,b,c){return Eg(null,a,b,!1,c)},unstable_renderSubtreeIntoContainer:function(a,b,c,d){null==a||void 0===a._reactInternalFiber?D("38"):void 0;return Eg(a,b,c,!1,d)},unmountComponentAtNode:function(a){ug(a)?void 0:D("40");return a._reactRootContainer?(X.unbatchedUpdates(function(){Eg(null,null,a,!1,function(){a._reactRootContainer=
 null})}),!0):!1},unstable_createPortal:function(){return Fg.apply(void 0,arguments)},unstable_batchedUpdates:X.batchedUpdates,unstable_deferredUpdates:X.deferredUpdates,flushSync:X.flushSync,unstable_flushControlled:X.flushControlled,__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED:{EventPluginHub:Ra,EventPluginRegistry:Ca,EventPropagators:kb,ReactControlledComponent:$b,ReactDOMComponentTree:bb,ReactDOMEventListener:$d},unstable_createRoot:function(a,b){return new tg(a,!0,null!=b&&!0===b.hydrate)}};
-X.injectIntoDevTools({findFiberByHostInstance:Ua,bundleType:0,version:"16.3.2",rendererPackageName:"react-dom"});var Hg=Object.freeze({default:Gg}),Ig=Hg&&Gg||Hg;module.exports=Ig["default"]?Ig["default"]:Ig;
+X.injectIntoDevTools({findFiberByHostInstance:Ua,bundleType:0,version:"16.3.3",rendererPackageName:"react-dom"});var Hg=Object.freeze({default:Gg}),Ig=Hg&&Gg||Hg;module.exports=Ig["default"]?Ig["default"]:Ig;
 
-},{"fbjs/lib/ExecutionEnvironment":21,"fbjs/lib/containsNode":24,"fbjs/lib/emptyFunction":25,"fbjs/lib/emptyObject":26,"fbjs/lib/getActiveElement":27,"fbjs/lib/invariant":30,"fbjs/lib/shallowEqual":33,"object-assign":35,"react":40}],20:[function(require,module,exports){
+},{"fbjs/lib/ExecutionEnvironment":20,"fbjs/lib/containsNode":23,"fbjs/lib/emptyFunction":24,"fbjs/lib/emptyObject":25,"fbjs/lib/getActiveElement":26,"fbjs/lib/invariant":29,"fbjs/lib/shallowEqual":32,"object-assign":34,"react":39}],19:[function(require,module,exports){
 (function (process){
 'use strict';
 
@@ -26557,7 +26667,7 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 }).call(this,require('_process'))
-},{"./cjs/react-dom.development.js":18,"./cjs/react-dom.production.min.js":19,"_process":14}],21:[function(require,module,exports){
+},{"./cjs/react-dom.development.js":17,"./cjs/react-dom.production.min.js":18,"_process":11}],20:[function(require,module,exports){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
  *
@@ -26591,7 +26701,7 @@ var ExecutionEnvironment = {
 };
 
 module.exports = ExecutionEnvironment;
-},{}],22:[function(require,module,exports){
+},{}],21:[function(require,module,exports){
 "use strict";
 
 /**
@@ -26621,7 +26731,7 @@ function camelize(string) {
 }
 
 module.exports = camelize;
-},{}],23:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
  *
@@ -26659,7 +26769,7 @@ function camelizeStyleName(string) {
 }
 
 module.exports = camelizeStyleName;
-},{"./camelize":22}],24:[function(require,module,exports){
+},{"./camelize":21}],23:[function(require,module,exports){
 'use strict';
 
 /**
@@ -26697,7 +26807,7 @@ function containsNode(outerNode, innerNode) {
 }
 
 module.exports = containsNode;
-},{"./isTextNode":32}],25:[function(require,module,exports){
+},{"./isTextNode":31}],24:[function(require,module,exports){
 "use strict";
 
 /**
@@ -26734,7 +26844,7 @@ emptyFunction.thatReturnsArgument = function (arg) {
 };
 
 module.exports = emptyFunction;
-},{}],26:[function(require,module,exports){
+},{}],25:[function(require,module,exports){
 (function (process){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
@@ -26754,7 +26864,7 @@ if (process.env.NODE_ENV !== 'production') {
 
 module.exports = emptyObject;
 }).call(this,require('_process'))
-},{"_process":14}],27:[function(require,module,exports){
+},{"_process":11}],26:[function(require,module,exports){
 'use strict';
 
 /**
@@ -26791,7 +26901,7 @@ function getActiveElement(doc) /*?DOMElement*/{
 }
 
 module.exports = getActiveElement;
-},{}],28:[function(require,module,exports){
+},{}],27:[function(require,module,exports){
 'use strict';
 
 /**
@@ -26822,7 +26932,7 @@ function hyphenate(string) {
 }
 
 module.exports = hyphenate;
-},{}],29:[function(require,module,exports){
+},{}],28:[function(require,module,exports){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
  *
@@ -26859,7 +26969,7 @@ function hyphenateStyleName(string) {
 }
 
 module.exports = hyphenateStyleName;
-},{"./hyphenate":28}],30:[function(require,module,exports){
+},{"./hyphenate":27}],29:[function(require,module,exports){
 (function (process){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
@@ -26915,7 +27025,7 @@ function invariant(condition, format, a, b, c, d, e, f) {
 
 module.exports = invariant;
 }).call(this,require('_process'))
-},{"_process":14}],31:[function(require,module,exports){
+},{"_process":11}],30:[function(require,module,exports){
 'use strict';
 
 /**
@@ -26938,7 +27048,7 @@ function isNode(object) {
 }
 
 module.exports = isNode;
-},{}],32:[function(require,module,exports){
+},{}],31:[function(require,module,exports){
 'use strict';
 
 /**
@@ -26961,7 +27071,7 @@ function isTextNode(object) {
 }
 
 module.exports = isTextNode;
-},{"./isNode":31}],33:[function(require,module,exports){
+},{"./isNode":30}],32:[function(require,module,exports){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
  *
@@ -27027,7 +27137,7 @@ function shallowEqual(objA, objB) {
 }
 
 module.exports = shallowEqual;
-},{}],34:[function(require,module,exports){
+},{}],33:[function(require,module,exports){
 (function (process){
 /**
  * Copyright (c) 2014-present, Facebook, Inc.
@@ -27092,7 +27202,7 @@ if (process.env.NODE_ENV !== 'production') {
 
 module.exports = warning;
 }).call(this,require('_process'))
-},{"./emptyFunction":25,"_process":14}],35:[function(require,module,exports){
+},{"./emptyFunction":24,"_process":11}],34:[function(require,module,exports){
 /*
 object-assign
 (c) Sindre Sorhus
@@ -27184,7 +27294,7 @@ module.exports = shouldUseNative() ? Object.assign : function (target, source) {
 	return to;
 };
 
-},{}],36:[function(require,module,exports){
+},{}],35:[function(require,module,exports){
 (function (process){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
@@ -27195,11 +27305,24 @@ module.exports = shouldUseNative() ? Object.assign : function (target, source) {
 
 'use strict';
 
+var printWarning = function() {};
+
 if (process.env.NODE_ENV !== 'production') {
-  var invariant = require('fbjs/lib/invariant');
-  var warning = require('fbjs/lib/warning');
   var ReactPropTypesSecret = require('./lib/ReactPropTypesSecret');
   var loggedTypeFailures = {};
+
+  printWarning = function(text) {
+    var message = 'Warning: ' + text;
+    if (typeof console !== 'undefined') {
+      console.error(message);
+    }
+    try {
+      // --- Welcome to debugging React ---
+      // This error was thrown as a convenience so that you can use this stack
+      // to find the callsite that caused this warning to fire.
+      throw new Error(message);
+    } catch (x) {}
+  };
 }
 
 /**
@@ -27224,12 +27347,29 @@ function checkPropTypes(typeSpecs, values, location, componentName, getStack) {
         try {
           // This is intentionally an invariant that gets caught. It's the same
           // behavior as without this statement except with a better message.
-          invariant(typeof typeSpecs[typeSpecName] === 'function', '%s: %s type `%s` is invalid; it must be a function, usually from ' + 'the `prop-types` package, but received `%s`.', componentName || 'React class', location, typeSpecName, typeof typeSpecs[typeSpecName]);
+          if (typeof typeSpecs[typeSpecName] !== 'function') {
+            var err = Error(
+              (componentName || 'React class') + ': ' + location + ' type `' + typeSpecName + '` is invalid; ' +
+              'it must be a function, usually from the `prop-types` package, but received `' + typeof typeSpecs[typeSpecName] + '`.'
+            );
+            err.name = 'Invariant Violation';
+            throw err;
+          }
           error = typeSpecs[typeSpecName](values, typeSpecName, componentName, location, null, ReactPropTypesSecret);
         } catch (ex) {
           error = ex;
         }
-        warning(!error || error instanceof Error, '%s: type specification of %s `%s` is invalid; the type checker ' + 'function must return `null` or an `Error` but returned a %s. ' + 'You may have forgotten to pass an argument to the type checker ' + 'creator (arrayOf, instanceOf, objectOf, oneOf, oneOfType, and ' + 'shape all require an argument).', componentName || 'React class', location, typeSpecName, typeof error);
+        if (error && !(error instanceof Error)) {
+          printWarning(
+            (componentName || 'React class') + ': type specification of ' +
+            location + ' `' + typeSpecName + '` is invalid; the type checker ' +
+            'function must return `null` or an `Error` but returned a ' + typeof error + '. ' +
+            'You may have forgotten to pass an argument to the type checker ' +
+            'creator (arrayOf, instanceOf, objectOf, oneOf, oneOfType, and ' +
+            'shape all require an argument).'
+          )
+
+        }
         if (error instanceof Error && !(error.message in loggedTypeFailures)) {
           // Only monitor this failure once because there tends to be a lot of the
           // same error.
@@ -27237,7 +27377,9 @@ function checkPropTypes(typeSpecs, values, location, componentName, getStack) {
 
           var stack = getStack ? getStack() : '';
 
-          warning(false, 'Failed %s type: %s%s', location, error.message, stack != null ? stack : '');
+          printWarning(
+            'Failed ' + location + ' type: ' + error.message + (stack != null ? stack : '')
+          );
         }
       }
     }
@@ -27247,7 +27389,7 @@ function checkPropTypes(typeSpecs, values, location, componentName, getStack) {
 module.exports = checkPropTypes;
 
 }).call(this,require('_process'))
-},{"./lib/ReactPropTypesSecret":37,"_process":14,"fbjs/lib/invariant":30,"fbjs/lib/warning":34}],37:[function(require,module,exports){
+},{"./lib/ReactPropTypesSecret":36,"_process":11}],36:[function(require,module,exports){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
  *
@@ -27261,7 +27403,7 @@ var ReactPropTypesSecret = 'SECRET_DO_NOT_PASS_THIS_OR_YOU_WILL_BE_FIRED';
 
 module.exports = ReactPropTypesSecret;
 
-},{}],38:[function(require,module,exports){
+},{}],37:[function(require,module,exports){
 (function (process){
 /** @license React v16.3.2
  * react.development.js
@@ -28679,7 +28821,7 @@ module.exports = react;
 }
 
 }).call(this,require('_process'))
-},{"_process":14,"fbjs/lib/emptyFunction":41,"fbjs/lib/emptyObject":42,"fbjs/lib/invariant":43,"fbjs/lib/warning":44,"object-assign":45,"prop-types/checkPropTypes":46}],39:[function(require,module,exports){
+},{"_process":11,"fbjs/lib/emptyFunction":40,"fbjs/lib/emptyObject":41,"fbjs/lib/invariant":42,"fbjs/lib/warning":43,"object-assign":44,"prop-types/checkPropTypes":45}],38:[function(require,module,exports){
 /** @license React v16.3.2
  * react.production.min.js
  *
@@ -28703,7 +28845,7 @@ _calculateChangedBits:b,_defaultValue:a,_currentValue:a,_changedBits:0,Provider:
 (k=a.type.defaultProps);for(c in b)J.call(b,c)&&!K.hasOwnProperty(c)&&(d[c]=void 0===b[c]&&void 0!==k?k[c]:b[c])}c=arguments.length-2;if(1===c)d.children=e;else if(1<c){k=Array(c);for(var l=0;l<c;l++)k[l]=arguments[l+2];d.children=k}return{$$typeof:t,type:a.type,key:g,ref:h,props:d,_owner:f}},createFactory:function(a){var b=L.bind(null,a);b.type=a;return b},isValidElement:M,version:"16.3.2",__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED:{ReactCurrentOwner:I,assign:m}},X=Object.freeze({default:W}),
 Y=X&&W||X;module.exports=Y["default"]?Y["default"]:Y;
 
-},{"fbjs/lib/emptyFunction":41,"fbjs/lib/emptyObject":42,"fbjs/lib/invariant":43,"object-assign":45}],40:[function(require,module,exports){
+},{"fbjs/lib/emptyFunction":40,"fbjs/lib/emptyObject":41,"fbjs/lib/invariant":42,"object-assign":44}],39:[function(require,module,exports){
 (function (process){
 'use strict';
 
@@ -28714,49 +28856,116 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 }).call(this,require('_process'))
-},{"./cjs/react.development.js":38,"./cjs/react.production.min.js":39,"_process":14}],41:[function(require,module,exports){
+},{"./cjs/react.development.js":37,"./cjs/react.production.min.js":38,"_process":11}],40:[function(require,module,exports){
+arguments[4][24][0].apply(exports,arguments)
+},{"dup":24}],41:[function(require,module,exports){
 arguments[4][25][0].apply(exports,arguments)
-},{"dup":25}],42:[function(require,module,exports){
-arguments[4][26][0].apply(exports,arguments)
-},{"_process":14,"dup":26}],43:[function(require,module,exports){
-arguments[4][30][0].apply(exports,arguments)
-},{"_process":14,"dup":30}],44:[function(require,module,exports){
+},{"_process":11,"dup":25}],42:[function(require,module,exports){
+arguments[4][29][0].apply(exports,arguments)
+},{"_process":11,"dup":29}],43:[function(require,module,exports){
+arguments[4][33][0].apply(exports,arguments)
+},{"./emptyFunction":40,"_process":11,"dup":33}],44:[function(require,module,exports){
 arguments[4][34][0].apply(exports,arguments)
-},{"./emptyFunction":41,"_process":14,"dup":34}],45:[function(require,module,exports){
+},{"dup":34}],45:[function(require,module,exports){
 arguments[4][35][0].apply(exports,arguments)
-},{"dup":35}],46:[function(require,module,exports){
+},{"./lib/ReactPropTypesSecret":46,"_process":11,"dup":35}],46:[function(require,module,exports){
 arguments[4][36][0].apply(exports,arguments)
-},{"./lib/ReactPropTypesSecret":47,"_process":14,"dup":36,"fbjs/lib/invariant":43,"fbjs/lib/warning":44}],47:[function(require,module,exports){
-arguments[4][37][0].apply(exports,arguments)
-},{"dup":37}],48:[function(require,module,exports){
+},{"dup":36}],47:[function(require,module,exports){
 "use strict";
 
 exports.__esModule = true;
 exports.default = void 0;
 
-var isElement = function isElement(el) {
-  return el != null && typeof el == 'object' && (el.nodeType === 1 || el.nodeType === 11);
-};
+var _computeScrollIntoView = _interopRequireDefault(require("compute-scroll-into-view"));
 
-var hasScrollableSpace = function hasScrollableSpace(el, axis) {
-  return axis === 'X' ? el.clientWidth < el.scrollWidth : el.clientHeight < el.scrollHeight;
-};
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
-var canOverflow = function canOverflow(el, axis, skipOverflowHiddenElements) {
-  var overflowValue = getComputedStyle(el, null)['overflow' + axis];
+function isOptionsObject(options) {
+  return options === Object(options) && Object.keys(options).length !== 0;
+}
 
-  if (skipOverflowHiddenElements && overflowValue === 'hidden') {
+function defaultBehavior(actions, behavior) {
+  if (behavior === void 0) {
+    behavior = 'auto';
+  }
+
+  var canSmoothScroll = 'scrollBehavior' in document.body.style;
+  actions.forEach(function (_ref) {
+    var el = _ref.el,
+        top = _ref.top,
+        left = _ref.left;
+
+    if (el.scroll && canSmoothScroll) {
+      el.scroll({
+        top: top,
+        left: left,
+        behavior: behavior
+      });
+    } else {
+      el.scrollTop = top;
+      el.scrollLeft = left;
+    }
+  });
+}
+
+function getOptions(options) {
+  if (options === false) {
+    return {
+      block: 'end',
+      inline: 'nearest'
+    };
+  }
+
+  if (isOptionsObject(options)) {
+    return options;
+  }
+
+  return {
+    block: 'start',
+    inline: 'nearest'
+  };
+}
+
+function scrollIntoView(target, options) {
+  if (isOptionsObject(options) && typeof options.behavior === 'function') {
+    return options.behavior((0, _computeScrollIntoView.default)(target, options));
+  }
+
+  var computeOptions = getOptions(options);
+  return defaultBehavior((0, _computeScrollIntoView.default)(target, computeOptions), computeOptions.behavior);
+}
+
+var _default = scrollIntoView;
+exports.default = _default;
+module.exports = exports.default;
+},{"compute-scroll-into-view":48}],48:[function(require,module,exports){
+"use strict";
+
+exports.__esModule = true;
+exports.default = void 0;
+
+function isElement(el) {
+  return el != null && typeof el === 'object' && (el.nodeType === 1 || el.nodeType === 11);
+}
+
+function canOverflow(overflow, skipOverflowHiddenElements) {
+  if (skipOverflowHiddenElements && overflow === 'hidden') {
     return false;
   }
 
-  return overflowValue !== 'visible' && overflowValue !== 'clip';
-};
+  return overflow !== 'visible' && overflow !== 'clip';
+}
 
-var isScrollable = function isScrollable(el, skipOverflowHiddenElements) {
-  return hasScrollableSpace(el, 'Y') && canOverflow(el, 'Y', skipOverflowHiddenElements) || hasScrollableSpace(el, 'X') && canOverflow(el, 'X', skipOverflowHiddenElements);
-};
+function isScrollable(el, skipOverflowHiddenElements) {
+  if (el.clientHeight < el.scrollHeight || el.clientWidth < el.scrollWidth) {
+    var style = getComputedStyle(el, null);
+    return canOverflow(style.overflowY, skipOverflowHiddenElements) || canOverflow(style.overflowX, skipOverflowHiddenElements);
+  }
 
-var alignNearest = function alignNearest(scrollingEdgeStart, scrollingEdgeEnd, scrollingSize, scrollingBorderStart, scrollingBorderEnd, elementEdgeStart, elementEdgeEnd, elementSize) {
+  return false;
+}
+
+function alignNearest(scrollingEdgeStart, scrollingEdgeEnd, scrollingSize, scrollingBorderStart, scrollingBorderEnd, elementEdgeStart, elementEdgeEnd, elementSize) {
   if (elementEdgeStart < scrollingEdgeStart && elementEdgeEnd > scrollingEdgeEnd || elementEdgeStart > scrollingEdgeStart && elementEdgeEnd < scrollingEdgeEnd) {
     return 0;
   }
@@ -28770,83 +28979,75 @@ var alignNearest = function alignNearest(scrollingEdgeStart, scrollingEdgeEnd, s
   }
 
   return 0;
-};
+}
 
 var _default = function _default(target, options) {
-  if (options === void 0) {
-    options = {};
-  }
-
-  var _options = options,
-      _options$scrollMode = _options.scrollMode,
-      scrollMode = _options$scrollMode === void 0 ? 'always' : _options$scrollMode,
-      _options$block = _options.block,
-      block = _options$block === void 0 ? 'center' : _options$block,
-      _options$inline = _options.inline,
-      inline = _options$inline === void 0 ? 'nearest' : _options$inline,
-      boundary = _options.boundary,
-      _options$skipOverflow = _options.skipOverflowHiddenElements,
-      skipOverflowHiddenElements = _options$skipOverflow === void 0 ? false : _options$skipOverflow;
-  var checkBoundary = typeof boundary == 'function' ? boundary : function (parent) {
-    return parent !== boundary;
+  var scrollMode = options.scrollMode,
+      block = options.block,
+      inline = options.inline,
+      boundary = options.boundary,
+      skipOverflowHiddenElements = options.skipOverflowHiddenElements;
+  var checkBoundary = typeof boundary === 'function' ? boundary : function (node) {
+    return node !== boundary;
   };
 
   if (!isElement(target)) {
-    throw new Error('Element is required in scrollIntoView');
+    throw new TypeError('Invalid target');
   }
 
-  var targetRect = target.getBoundingClientRect();
-  var viewport = document.scrollingElement || document.documentElement;
+  var scrollingElement = document.scrollingElement || document.documentElement;
   var frames = [];
-  var parent;
+  var cursor = target;
 
-  while (isElement(parent = target.parentNode || target.host) && checkBoundary(target)) {
-    if (isScrollable(parent, skipOverflowHiddenElements) || parent === viewport) {
-      frames.push(parent);
+  while (isElement(cursor) && checkBoundary(cursor)) {
+    cursor = cursor.parentNode || cursor.host;
+
+    if (cursor === scrollingElement) {
+      frames.push(cursor);
+      break;
     }
 
-    target = parent;
-  }
+    if (cursor === document.body && isScrollable(cursor) && !isScrollable(document.documentElement)) {
+      continue;
+    }
 
-  var viewportWidth = window.visualViewport ? window.visualViewport.width : viewport.clientWidth;
-  var viewportHeight = window.visualViewport ? window.visualViewport.height : viewport.clientHeight;
-  var viewportX = window.scrollX || window.pageXOffset;
-  var viewportY = window.scrollY || window.pageYOffset;
-
-  if (scrollMode === 'if-needed') {
-    var isVisible = frames.every(function (frame) {
-      var frameRect = frame.getBoundingClientRect();
-
-      if (targetRect.top < frameRect.top) {
-        return false;
-      }
-
-      if (targetRect.bottom > frameRect.bottom) {
-        return false;
-      }
-
-      if (frame === viewport) {
-        if (targetRect.bottom > viewportHeight) {
-          return false;
-        }
-
-        if (targetRect.left > viewportWidth) {
-          return false;
-        }
-      }
-
-      return true;
-    });
-
-    if (isVisible) {
-      return [];
+    if (isScrollable(cursor, skipOverflowHiddenElements)) {
+      frames.push(cursor);
     }
   }
 
-  var targetBlock;
-  var targetInline;
-  var computations = frames.map(function (frame) {
-    var frameRect = frame.getBoundingClientRect();
+  var viewportWidth = window.visualViewport ? visualViewport.width : innerWidth;
+  var viewportHeight = window.visualViewport ? visualViewport.height : innerHeight;
+  var viewportX = window.scrollX || pageXOffset;
+  var viewportY = window.scrollY || pageYOffset;
+
+  var _target$getBoundingCl = target.getBoundingClientRect(),
+      targetHeight = _target$getBoundingCl.height,
+      targetWidth = _target$getBoundingCl.width,
+      targetTop = _target$getBoundingCl.top,
+      targetRight = _target$getBoundingCl.right,
+      targetBottom = _target$getBoundingCl.bottom,
+      targetLeft = _target$getBoundingCl.left;
+
+  var targetBlock = block === 'start' || block === 'nearest' ? targetTop : block === 'end' ? targetBottom : targetTop + targetHeight / 2;
+  var targetInline = inline === 'center' ? targetLeft + targetWidth / 2 : inline === 'end' ? targetRight : targetLeft;
+  var computations = [];
+
+  for (var index = 0; index < frames.length; index++) {
+    var frame = frames[index];
+
+    var _frame$getBoundingCli = frame.getBoundingClientRect(),
+        _height = _frame$getBoundingCli.height,
+        _width = _frame$getBoundingCli.width,
+        _top = _frame$getBoundingCli.top,
+        right = _frame$getBoundingCli.right,
+        bottom = _frame$getBoundingCli.bottom,
+        _left = _frame$getBoundingCli.left;
+
+    if (scrollMode === 'if-needed' && targetTop >= 0 && targetLeft >= 0 && targetBottom <= viewportHeight && targetRight <= viewportWidth && targetTop >= _top && targetBottom <= bottom && targetLeft >= _left && targetRight <= right) {
+      return computations;
+    }
+
     var frameStyle = getComputedStyle(frame);
     var borderLeft = parseInt(frameStyle.borderLeftWidth, 10);
     var borderTop = parseInt(frameStyle.borderTopWidth, 10);
@@ -28854,233 +29055,74 @@ var _default = function _default(target, options) {
     var borderBottom = parseInt(frameStyle.borderBottomWidth, 10);
     var blockScroll = 0;
     var inlineScroll = 0;
+    var scrollbarWidth = 'offsetWidth' in frame ? frame.offsetWidth - frame.clientWidth - borderLeft - borderRight : 0;
+    var scrollbarHeight = 'offsetHeight' in frame ? frame.offsetHeight - frame.clientHeight - borderTop - borderBottom : 0;
 
-    if (block === 'start') {
-      if (!targetBlock) {
-        targetBlock = targetRect.top;
-      }
-
-      if (viewport === frame) {
-        blockScroll = viewportY + targetBlock;
+    if (scrollingElement === frame) {
+      if (block === 'start') {
+        blockScroll = targetBlock;
+      } else if (block === 'end') {
+        blockScroll = targetBlock - viewportHeight;
+      } else if (block === 'nearest') {
+        blockScroll = alignNearest(viewportY, viewportY + viewportHeight, viewportHeight, borderTop, borderBottom, viewportY + targetBlock, viewportY + targetBlock + targetHeight, targetHeight);
       } else {
-        var offset = Math.min(targetBlock - frameRect.top, frame.scrollHeight - frame.clientHeight - frame.scrollTop);
-        blockScroll = frame.scrollTop + offset - borderTop;
+        blockScroll = targetBlock - viewportHeight / 2;
       }
+
+      if (inline === 'start') {
+        inlineScroll = targetInline;
+      } else if (inline === 'center') {
+        inlineScroll = targetInline - viewportWidth / 2;
+      } else if (inline === 'end') {
+        inlineScroll = targetInline - viewportWidth;
+      } else {
+        inlineScroll = alignNearest(viewportX, viewportX + viewportWidth, viewportWidth, borderLeft, borderRight, viewportX + targetInline, viewportX + targetInline + targetWidth, targetWidth);
+      }
+
+      blockScroll = Math.max(0, blockScroll + viewportY);
+      inlineScroll = Math.max(0, inlineScroll + viewportX);
+    } else {
+      if (block === 'start') {
+        blockScroll = targetBlock - _top - borderTop;
+      } else if (block === 'end') {
+        blockScroll = targetBlock - bottom + borderBottom + scrollbarHeight;
+      } else if (block === 'nearest') {
+        blockScroll = alignNearest(_top, bottom, _height, borderTop, borderBottom + scrollbarHeight, targetBlock, targetBlock + targetHeight, targetHeight);
+      } else {
+        blockScroll = targetBlock - (_top + _height / 2) + scrollbarHeight / 2;
+      }
+
+      if (inline === 'start') {
+        inlineScroll = targetInline - _left - borderLeft;
+      } else if (inline === 'center') {
+        inlineScroll = targetInline - (_left + _width / 2) + scrollbarWidth / 2;
+      } else if (inline === 'end') {
+        inlineScroll = targetInline - right + borderRight + scrollbarWidth;
+      } else {
+        inlineScroll = alignNearest(_left, right, _width, borderLeft, borderRight + scrollbarWidth, targetInline, targetInline + targetWidth, targetWidth);
+      }
+
+      var scrollLeft = frame.scrollLeft,
+          scrollTop = frame.scrollTop;
+      blockScroll = Math.max(0, Math.min(scrollTop + blockScroll, frame.scrollHeight - _height + scrollbarHeight));
+      inlineScroll = Math.max(0, Math.min(scrollLeft + inlineScroll, frame.scrollWidth - _width + scrollbarWidth));
+      targetBlock += scrollTop - blockScroll;
+      targetInline += scrollLeft - inlineScroll;
     }
 
-    if (block === 'center') {
-      if (!targetBlock) {
-        targetBlock = targetRect.top + targetRect.height / 2;
-      }
-
-      if (viewport === frame) {
-        blockScroll = viewportY + targetBlock - frame.clientHeight / 2;
-      } else {
-        var _offset = 0 - Math.min(frameRect.top + frameRect.height / 2 - targetBlock, frame.scrollTop);
-
-        blockScroll = frame.scrollTop + _offset;
-      }
-    }
-
-    if (block === 'end') {
-      if (!targetBlock) {
-        targetBlock = targetRect.bottom;
-      }
-
-      if (viewport === frame) {
-        blockScroll = viewportY + targetBlock - frame.clientHeight;
-      } else {
-        var _offset2 = 0 - Math.min(frameRect.bottom - targetBlock, frame.scrollTop);
-
-        blockScroll = frame.scrollTop + _offset2 + borderBottom;
-      }
-    }
-
-    if (block === 'nearest') {
-      if (!targetBlock) {
-        targetBlock = targetRect.top;
-      }
-
-      if (viewport === frame) {
-        var _offset3 = alignNearest(viewportY, viewportY + viewportHeight, viewportHeight, borderTop, borderBottom, viewportY + targetBlock, viewportY + targetBlock + targetRect.height, targetRect.height);
-
-        blockScroll = viewportY + _offset3;
-      } else {
-        var _offset4 = alignNearest(frameRect.top, frameRect.bottom, frameRect.height, borderTop, borderBottom, targetBlock, targetBlock + targetRect.height, targetRect.height);
-
-        blockScroll = frame.scrollTop + _offset4;
-      }
-    }
-
-    if (inline === 'start') {
-      if (!targetInline) {
-        targetInline = targetRect.left;
-      }
-
-      if (viewport === frame) {
-        inlineScroll = viewportX + targetInline;
-      } else {
-        var _offset5 = Math.min(targetInline - frameRect.left, frame.scrollHeight - frame.clientLeft - frame.scrollLeft);
-
-        inlineScroll = frame.scrollLeft + _offset5 - borderLeft;
-      }
-    }
-
-    if (inline === 'center') {
-      if (!targetInline) {
-        targetInline = targetRect.left + targetRect.width / 2;
-      }
-
-      if (viewport === frame) {
-        inlineScroll = viewportX + targetInline - frame.clientWidth / 2;
-      } else {
-        var _offset6 = 0 - Math.min(frameRect.left + frameRect.width / 2 - targetInline, frame.scrollLeft);
-
-        inlineScroll = frame.scrollLeft + _offset6;
-      }
-    }
-
-    if (inline === 'end') {
-      if (!targetInline) {
-        targetInline = targetRect.right;
-      }
-
-      if (viewport === frame) {
-        inlineScroll = viewportX + targetInline - frame.clientWidth;
-      } else {
-        var _offset7 = 0 - Math.min(frameRect.right - targetInline, frame.scrollLeft);
-
-        inlineScroll = frame.scrollLeft + _offset7 + borderRight;
-      }
-    }
-
-    if (inline === 'nearest') {
-      if (!targetInline) {
-        targetInline = targetRect.left;
-      }
-
-      if (viewport === frame) {
-        var _offset8 = alignNearest(viewportX, viewportX + viewportWidth, viewportWidth, borderLeft, borderRight, viewportX + targetInline, viewportX + targetInline + targetRect.width, targetRect.width);
-
-        inlineScroll = viewportX + _offset8;
-      } else {
-        var _offset9 = alignNearest(frameRect.left, frameRect.right, frameRect.width, borderLeft, borderRight, targetInline, targetInline + targetRect.width, targetRect.width);
-
-        inlineScroll = frame.scrollLeft + _offset9;
-      }
-    }
-
-    targetBlock += frame.scrollTop - blockScroll;
-    targetInline += frame.scrollLeft - inlineScroll;
-    return {
+    computations.push({
       el: frame,
       top: blockScroll,
       left: inlineScroll
-    };
-  });
+    });
+  }
+
   return computations;
 };
 
 exports.default = _default;
 module.exports = exports["default"];
 },{}],49:[function(require,module,exports){
-"use strict";
-
-exports.__esModule = true;
-exports.default = void 0;
-
-var _compute = _interopRequireDefault(require("./compute"));
-
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
-
-var supportsScrollBehavior;
-var scrollingElement;
-
-var isFunction = function isFunction(arg) {
-  return typeof arg == 'function';
-};
-
-var isOptionsObject = function isOptionsObject(options) {
-  return options === Object(options) && Object.keys(options).length !== 0;
-};
-
-var defaultBehavior = function defaultBehavior(actions, behavior) {
-  if (behavior === void 0) {
-    behavior = 'auto';
-  }
-
-  if (!scrollingElement) {
-    scrollingElement = document.scrollingElement || document.documentElement;
-  }
-
-  if (supportsScrollBehavior === undefined) {
-    supportsScrollBehavior = 'scrollBehavior' in scrollingElement.style;
-  }
-
-  actions.forEach(function (_ref) {
-    var el = _ref.el,
-        top = _ref.top,
-        left = _ref.left;
-
-    if (el.scroll && supportsScrollBehavior) {
-      el.scroll({
-        top: top,
-        left: left,
-        behavior: behavior
-      });
-    } else {
-      if (el === scrollingElement) {
-        window.scrollTo(left, top);
-      } else {
-        el.scrollTop = top;
-        el.scrollLeft = left;
-      }
-    }
-  });
-};
-
-var getOptions = function getOptions(options) {
-  if (options === void 0) {
-    options = true;
-  }
-
-  if (options === true || options === null) {
-    return {
-      block: 'start',
-      inline: 'nearest'
-    };
-  } else if (options === false) {
-    return {
-      block: 'end',
-      inline: 'nearest'
-    };
-  } else if (isOptionsObject(options)) {
-    return options;
-  }
-
-  return {
-    block: 'start',
-    inline: 'nearest'
-  };
-};
-
-function scrollIntoView(target, options) {
-  if (options === void 0) {
-    options = true;
-  }
-
-  if (isOptionsObject(options) && isFunction(options.behavior)) {
-    return options.behavior((0, _compute.default)(target, options));
-  }
-
-  var computeOptions = getOptions(options);
-  return defaultBehavior((0, _compute.default)(target, computeOptions), computeOptions.behavior);
-}
-
-var _default = scrollIntoView;
-exports.default = _default;
-module.exports = exports["default"];
-},{"./compute":48}],50:[function(require,module,exports){
 'use strict'
 
 const peacock = require('peacock')
@@ -29301,14 +29343,13 @@ class ThemeBrowser {
 
 module.exports = ThemeBrowser
 
-},{"peacock":3}],51:[function(require,module,exports){
+},{"peacock":14}],50:[function(require,module,exports){
 'use strict'
 
 /* eslint-disable camelcase */
 
 const LogReader = require('v8-tools-core/logreader')
 const { Profile } = require('v8-tools-core/profile')
-const { highlight } = require('cardinal')
 
 const IcEntry = require('./lib/log-processing/ic-entry')
 const DeoptEntry = require('./lib/log-processing/deopt-entry')
@@ -29316,10 +29357,6 @@ const CodeEntry = require('./lib/log-processing/code-entry')
 const { parseOptimizationState } = require('./lib/log-processing/optimization-state')
 
 const groupByFileAndLocation = require('./lib/grouping/group-by-file-and-location')
-
-const Theme = require('./lib/rendering/theme.terminal')
-const SummaryRenderer = require('./lib/rendering/render-summary.terminal')
-const MarkerResolver = require('./lib/rendering/marker-resolver')
 
 function maybeNumber(s) {
   if (s == null) return -1
@@ -29353,7 +29390,7 @@ class DeoptProcessor extends LogReader {
     this._root = root
     this._silentErrors = silentErrors
 
-    // pasing dispatch table that references `this` before invoking super
+    // passing dispatch table that references `this` before invoking super
     // doesn't work, so we set it afterwards
     this.dispatchTable_ = {
 
@@ -29578,48 +29615,12 @@ function deoptigate(groupedByFile) {
   return groupedByFileAndLocation
 }
 
-function render({ files, groups }, {
-    isterminal = true
-  , deoptsOnly = true
-  , filerFilter = null
-} = {}) {
-  const results = []
-  for (const [ file, info ] of groups) {
-    let { ics, deopts, icLocations, deoptLocations } = info
-    if (deoptsOnly) {
-      ics = null
-      icLocations = null
-    }
-    const code = files.get(file).src
-    const markerResolver = new MarkerResolver({
-        deopts
-      , deoptLocations
-      , ics
-      , icLocations
-      , isterminal
-    })
-    const summaryRenderer = new SummaryRenderer({
-        deopts
-      , deoptLocations
-      , ics
-      , icLocations
-    })
-    const theme = new Theme(markerResolver).theme
-    const highlightedCode = highlight(code, { theme, linenos: true })
-    const summary = summaryRenderer.render()
-
-    results.push({ file, highlightedCode, summary })
-  }
-  return results
-}
-
 module.exports = {
     processLogContent
-  , render
   , deoptigate
 }
 
-},{"./lib/grouping/group-by-file-and-location":52,"./lib/log-processing/code-entry":55,"./lib/log-processing/deopt-entry":56,"./lib/log-processing/ic-entry":57,"./lib/log-processing/optimization-state":59,"./lib/rendering/marker-resolver":60,"./lib/rendering/render-summary.terminal":61,"./lib/rendering/theme.terminal":62,"cardinal":67,"v8-tools-core/logreader":77,"v8-tools-core/profile":78}],52:[function(require,module,exports){
+},{"./lib/grouping/group-by-file-and-location":51,"./lib/log-processing/code-entry":54,"./lib/log-processing/deopt-entry":55,"./lib/log-processing/ic-entry":56,"./lib/log-processing/optimization-state":58,"v8-tools-core/logreader":63,"v8-tools-core/profile":64}],51:[function(require,module,exports){
 'use strict'
 
 const {
@@ -29713,7 +29714,7 @@ function groupByFileAndLocation(groupedByFile) {
 
 module.exports = groupByFileAndLocation
 
-},{"./location":53}],53:[function(require,module,exports){
+},{"./location":52}],52:[function(require,module,exports){
 'use strict'
 
 function keyLocation({ functionName, line, column }) {
@@ -29749,7 +29750,7 @@ module.exports = {
   , byLocationKey
 }
 
-},{}],54:[function(require,module,exports){
+},{}],53:[function(require,module,exports){
 'use strict'
 
 const { highestSeverity, lowestSeverity } = require('../severities')
@@ -29822,7 +29823,7 @@ function summarizeFile(ref) {
 
 module.exports = summarizeFile
 
-},{"../severities":64}],55:[function(require,module,exports){
+},{"../severities":60}],54:[function(require,module,exports){
 'use strict'
 
 const { severityOfOptimizationState }  = require('./optimization-state')
@@ -29863,7 +29864,7 @@ class CodeEntry {
 
 module.exports = CodeEntry
 
-},{"./optimization-state":59}],56:[function(require,module,exports){
+},{"./optimization-state":58}],55:[function(require,module,exports){
 'use strict'
 
 /* eslint-disable camelcase */
@@ -29949,7 +29950,7 @@ class DeoptEntry {
 
 module.exports = DeoptEntry
 
-},{"../severities":64}],57:[function(require,module,exports){
+},{"../severities":60}],56:[function(require,module,exports){
 'use strict'
 
 const {
@@ -30019,7 +30020,7 @@ class IcEntry {
 
 module.exports = IcEntry
 
-},{"./ic-state":58}],58:[function(require,module,exports){
+},{"./ic-state":57}],57:[function(require,module,exports){
 'use strict'
 
 const { MIN_SEVERITY } = require('../severities')
@@ -30077,7 +30078,7 @@ module.exports = {
   , severityIcState
 }
 
-},{"../severities":64}],59:[function(require,module,exports){
+},{"../severities":60}],58:[function(require,module,exports){
 'use strict'
 
 const { Profile } = require('v8-tools-core/profile')
@@ -30117,15 +30118,10 @@ module.exports = {
   , severityOfOptimizationState
 }
 
-},{"v8-tools-core/profile":78}],60:[function(require,module,exports){
+},{"v8-tools-core/profile":64}],59:[function(require,module,exports){
 'use strict'
 
-const colors = require('ansicolors')
-const {
-    severityColors
-  , browserSeverityColors
-  , MIN_SEVERITY
-} = require('../severities')
+const { severityColors, MIN_SEVERITY } = require('../severities')
 const { unkeyLocation } = require('../grouping/location')
 const assert = require('assert')
 
@@ -30134,24 +30130,23 @@ const ICSYMBOL = '☎'
 const CODESYMBOL = '▲'
 
 function applyMark(codeLocation, markerLocation) {
-  if (codeLocation.line > markerLocation.line) return true
-  if (codeLocation.line < markerLocation.line) return false
-  if (codeLocation.column < markerLocation.column) return false
+  if (codeLocation.line > markerLocation.line) { return true }
+  if (codeLocation.line < markerLocation.line) { return false }
+  if (codeLocation.column < markerLocation.column) { return false }
   return true
 }
 
 class MarkerResolver {
-  constructor({
-      ics
-    , deopts
-    , codes
-    , icLocations
-    , deoptLocations
-    , codeLocations
-  , isterminal
-    , selectedLocation = null
-    , includeAllSeverities = true
-  }) {
+  constructor(ref) {
+  var ics = ref.ics;
+  var deopts = ref.deopts;
+  var codes = ref.codes;
+  var icLocations = ref.icLocations;
+  var deoptLocations = ref.deoptLocations;
+  var codeLocations = ref.codeLocations;
+  var selectedLocation = ref.selectedLocation; if ( selectedLocation === void 0 ) selectedLocation = null;
+  var includeAllSeverities = ref.includeAllSeverities; if ( includeAllSeverities === void 0 ) includeAllSeverities = true;
+
     assert(ics == null || icLocations != null, 'need to provide locations for ics')
     assert(deopts == null || deoptLocations != null, 'need to provide locations for deopts')
     assert(codes == null || codeLocations != null, 'need to provide locations for codes')
@@ -30168,7 +30163,6 @@ class MarkerResolver {
     this._codeLocations = codeLocations
     this._codeLocationIdx = 0
 
-    this._isterminal = isterminal
     this._selectedLocation = selectedLocation
     this._includeAllSeverities = includeAllSeverities
   }
@@ -30195,7 +30189,7 @@ class MarkerResolver {
   }
 
   _resolveDeopt(codeLocation) {
-    if (this._deopts == null) return ''
+    if (this._deopts == null) { return '' }
     const { before, after, locationIdx } = this._resolve({
         codeLocation
       , map         : this._deopts
@@ -30207,7 +30201,7 @@ class MarkerResolver {
   }
 
   _resolveIc(codeLocation) {
-    if (this._ics == null) return ''
+    if (this._ics == null) { return '' }
     const { before, after, locationIdx } = this._resolve({
         codeLocation
       , map         : this._ics
@@ -30219,7 +30213,7 @@ class MarkerResolver {
   }
 
   _resolveCode(loc) {
-    if (this._codes == null) return ''
+    if (this._codes == null) { return '' }
     const { before, after, locationIdx } = this._resolve({
         codeLocation: loc
       , map         : this._codes
@@ -30230,7 +30224,12 @@ class MarkerResolver {
     return { before, after }
   }
 
-  _resolve({ map, codeLocation, locationIdx, locations }) {
+  _resolve(ref) {
+    var map = ref.map;
+    var codeLocation = ref.codeLocation;
+    var locationIdx = ref.locationIdx;
+    var locations = ref.locations;
+
     let before = ''
     let after = ''
 
@@ -30242,8 +30241,8 @@ class MarkerResolver {
       applyMark(codeLocation, currentLocation)
     ) {
       const { result, placeBefore } = this._determineMarkerSymbol(map, locationKey)
-      if (placeBefore) before += result
-      else after += result
+      if (placeBefore) { before += result }
+      else { after += result }
       locationIdx++
       locationKey = locations[locationIdx]
       currentLocation = unkeyLocation(locationKey)
@@ -30265,35 +30264,12 @@ class MarkerResolver {
 
   _handle(info, kind) {
     const severity = info.severity
-    if (severity === MIN_SEVERITY && !this._includeAllSeverities) return { result: '' }
-    const result = this._isterminal
-      ? this._determineTerminalMarkerSymbol(info, kind)
-      : this._determineBrowserMarkerSymbol(info, kind)
+    if (severity === MIN_SEVERITY && !this._includeAllSeverities) { return { result: '' } }
+    const result = this._determineBrowserMarkerSymbol(info, kind)
 
     // anonymous Node.js function wrapper
     const placeBefore = (info.isScript && info.line === 1 && info.column === 1)
     return { result, placeBefore }
-  }
-
-  _terminalSymbol(infos, severity, kind) {
-    const symbol = (
-        kind === 'deopt' ? DEOPTSYMBOL
-      : kind === 'ic' ? ICSYMBOL
-      : CODESYMBOL
-    )
-    return severityColors[severity - 1](symbol)
-  }
-
-  _terminalFootnote(infos) {
-    return colors.brightBlack(`(${infos.id})`)
-  }
-
-  // TODO: adapt or rip out
-  _determineTerminalMarkerSymbol(infos, severity, kind) {
-    return (
-      this._terminalSymbol(infos, severity, kind) +
-      this._terminalFootnote(infos)
-    )
   }
 
   _determineBrowserMarkerSymbol(info, kind) {
@@ -30302,7 +30278,7 @@ class MarkerResolver {
       : kind === 'ic' ? ICSYMBOL
       : CODESYMBOL
     )
-    const color = browserSeverityColors[info.severity - 1]
+    const color = severityColors[info.severity - 1]
     const className = (
       this._selectedLocation === info.id
       ? `${color} selected`
@@ -30317,390 +30293,10 @@ class MarkerResolver {
 
 module.exports = MarkerResolver
 
-},{"../grouping/location":53,"../severities":64,"ansicolors":66,"assert":12}],61:[function(require,module,exports){
+},{"../grouping/location":52,"../severities":60,"assert":6}],60:[function(require,module,exports){
 'use strict'
 
-const colors = require('ansicolors')
-const ansiRegex = require('ansi-regex')
-const table = require('text-table')
-const { severityColors } = require('../severities')
-const { nameIcState, severityIcState } = require('../log-processing/ic-state')
-const assert = require('assert')
-const { underlineRow, mainHeader } = require('./util')
-
-class TerminalSummaryRenderer {
-  constructor({ ics, icLocations, deopts, deoptLocations }) {
-    assert(ics == null || icLocations != null, 'need to provide locations for ics')
-    assert(deopts == null || deoptLocations != null, 'need to provide locations for deopts')
-
-    this._ics = ics
-    this._icLocations = icLocations
-    this._deopts = deopts
-    this._deoptLocations = deoptLocations
-  }
-
-  render() {
-    let rendered = ''
-    if (this._deopts != null) {
-      rendered += mainHeader('Deoptimizations') + '\n\n'
-      for (const loc of this._deoptLocations) {
-        const infos = this._deopts.get(loc)
-        rendered += this._summary(infos)
-        rendered += this._renderDeopts(infos)
-      }
-    }
-    if (this._ics != null) {
-      rendered += mainHeader('ICs') + '\n\n'
-      for (const loc of this._icLocations) {
-        const infos = this._ics.get(loc)
-        rendered += this._summary(infos)
-        rendered += this._renderIcs(infos)
-      }
-    }
-    return rendered
-  }
-
-  _summary(infos) {
-    const { id } = infos
-    const {
-        functionName
-      , file
-      , line
-      , column
-    } = infos[0]
-
-    const fullLoc = colors.brightBlack(`${functionName} at ${file}:${line}:${column}`)
-    const locationString = colors.blue(id)
-    return `(${locationString}): ${fullLoc}\n\n`
-  }
-
-  _renderDeopts(infos) {
-    const headerRow = [ 'Timestamp',  'Bailout', 'Reason', 'Inlined' ]
-    const underlined = underlineRow(headerRow)
-    const rows = [ headerRow, underlined ]
-
-    for (const info of infos) {
-      rows.push(this._deoptRow(info))
-    }
-    const opts = {
-        stringLength: x => String(x).replace(ansiRegex(), '').length
-      , align: [ 'r', 'l', 'l', 'c' ]
-      , hsep: ' | '
-    }
-
-    const tbl = table(rows, opts)
-    const indented = tbl.split('\n').map(x => `  ${x}`).join('\n')
-    return `${indented}\n\n\n`
-  }
-
-  _deoptRow(info) {
-    const {
-        inlined
-      , bailoutType
-      , deoptReason
-      , timestamp
-      , severity
-    } = info
-    const bailoutString = severityColors[severity - 1](bailoutType)
-    const timestampString = (timestamp > 0
-      ? colors.brightBlack(`${(timestamp / 1E3).toFixed()}ms`)
-      : 'n/a'
-    )
-    const inlinedString = colors.brightBlack(inlined)
-    return [
-        timestampString
-      , bailoutString
-      , deoptReason
-      , inlinedString
-    ]
-  }
-
-  _renderIcs(infos) {
-    const headerRow = [ 'Old State', 'New State', 'Key', 'Map' ]
-    const underlined = underlineRow(headerRow)
-    const rows = [ headerRow, underlined ]
-
-    for (const info of infos) {
-      rows.push(this._icRow(info))
-    }
-    const opts = {
-        stringLength: x => String(x).replace(ansiRegex(), '').length
-      , align: [ 'l', 'l', 'l', 'l' ]
-      , hsep: ' | '
-    }
-
-    const tbl = table(rows, opts)
-    const indented = tbl.split('\n').map(x => `  ${x}`).join('\n')
-    return `${indented}\n\n\n`
-  }
-
-  _icRow(info) {
-    const {
-        oldState
-      , newState
-      , key
-      , map
-    } = info
-
-    const oldStateName = nameIcState(oldState)
-    const severityOldState = severityIcState(oldState)
-    const oldStateString = severityColors[severityOldState - 1](oldStateName)
-
-    const newStateName = nameIcState(newState)
-    const severityNewState = severityIcState(newState)
-    const newStateString = severityColors[severityNewState - 1](newStateName)
-
-    const mapString = colors.brightBlack(`0x${map}`)
-
-    return [
-        oldStateString
-      , newStateString
-      , key
-      , mapString
-    ]
-  }
-}
-
-module.exports = TerminalSummaryRenderer
-
-},{"../log-processing/ic-state":58,"../severities":64,"./util":63,"ansi-regex":65,"ansicolors":66,"assert":12,"text-table":74}],62:[function(require,module,exports){
-'use strict'
-
-const colors = require('ansicolors')
-// eslint-disable-next-line no-unused-vars
-function inspect(obj, { depth = 5, colors = true, maxArrayLength = 10 } = {}) {
-  console.error(require('util').inspect(obj, { depth, colors, maxArrayLength }))
-}
-
-class ThemeTerminal {
-  constructor(markerResolver) {
-    this._markerResolver = markerResolver
-  }
-
-  _processToken(colorizer) {
-    function mark(s, info) {
-      const colorized = colorizer(s)
-      const { tokens, tokenIndex } = info
-      const token = tokens[tokenIndex]
-      const loc = token.loc.end
-      if (loc == null) return colorized
-
-      const { insertBefore, insertAfter } = this._markerResolver.resolve(loc)
-      return insertBefore + colorized + insertAfter
-    }
-    return mark.bind(this)
-  }
-
-  get theme() {
-    const x = this._processToken.bind(this)
-    // TODO: fix missing xs in Identifier and add jsx rules
-    // also add x for root undefined via identity functin
-    return {
-      'Boolean': {
-        'true'   :  undefined
-      , 'false'  :  undefined
-      , _default :  x(colors.brightRed)
-      }
-
-    , 'Identifier': {
-        'undefined' :  x(colors.brightBlack)
-      , 'self'      :  colors.brightRed
-      , 'console'   :  x(colors.blue)
-      , 'log'       :  colors.blue
-      , 'warn'      :  x(colors.red)
-      , 'error'     :  colors.brightRed
-      , _default    :  x(colors.white)
-      }
-
-    , 'Null': {
-        _default: x(colors.brightBlack)
-      }
-
-    , 'Numeric': {
-        _default: x(colors.blue)
-      }
-
-    , 'String': {
-        _default: function stringDefault(s, info) {
-          var nextToken = info.tokens[info.tokenIndex + 1]
-
-          // show keys of object literals and json in different color
-          return (nextToken && nextToken.type === 'Punctuator' && nextToken.value === ':')
-            ? colors.green(s)
-            : colors.brightGreen(s)
-        }
-      }
-
-    , 'Keyword': {
-        'break'       :  undefined
-
-      , 'case'        :  undefined
-      , 'catch'       :  x(colors.cyan)
-      , 'class'       :  undefined
-      , 'const'       :  undefined
-      , 'continue'    :  undefined
-
-      , 'debugger'    :  undefined
-      , 'default'     :  undefined
-      , 'delete'      :  x(colors.red)
-      , 'do'          :  undefined
-
-      , 'else'        :  undefined
-      , 'enum'        :  undefined
-      , 'export'      :  undefined
-      , 'extends'     :  undefined
-
-      , 'finally'     :  x(colors.cyan)
-      , 'for'         :  undefined
-      , 'function'    :  undefined
-
-      , 'if'          :  undefined
-      , 'implements'  :  undefined
-      , 'import'      :  undefined
-      , 'in'          :  undefined
-      , 'instanceof'  :  undefined
-      , 'let'         :  undefined
-      , 'new'         :  x(colors.red)
-      , 'package'     :  undefined
-      , 'private'     :  undefined
-      , 'protected'   :  undefined
-      , 'public'      :  undefined
-      , 'return'      :  x(colors.red)
-      , 'static'      :  undefined
-      , 'super'       :  undefined
-      , 'switch'      :  undefined
-
-      , 'this'        :  x(colors.brightRed)
-      , 'throw'       :  undefined
-      , 'try'         :  x(colors.cyan)
-      , 'typeof'      :  undefined
-
-      , 'var'         :  x(colors.green)
-      , 'void'        :  undefined
-
-      , 'while'       :  undefined
-      , 'with'        :  undefined
-      , 'yield'       :  undefined
-      , _default      :  x(colors.brightBlue)
-    }
-    , 'Punctuator': {
-        '': x(colors.brightBlack)
-      , '.': x(colors.green)
-      , ',': x(colors.green)
-
-      , '{': x(colors.yellow)
-      , '}': x(colors.yellow)
-      , '(': x(colors.brightBlack)
-      , ')': x(colors.brightBlack)
-      , '[': x(colors.yellow)
-      , ']': x(colors.yellow)
-
-      , '<': undefined
-      , '>': undefined
-      , '+': undefined
-      , '-': undefined
-      , '*': undefined
-      , '%': undefined
-      , '&': undefined
-      , '|': undefined
-      , '^': undefined
-      , '!': undefined
-      , '~': undefined
-      , '?': undefined
-      , ':': undefined
-      , '=': undefined
-
-      , '<=': undefined
-      , '>=': undefined
-      , '==': undefined
-      , '!=': undefined
-      , '++': undefined
-      , '--': undefined
-      , '<<': undefined
-      , '>>': undefined
-      , '&&': undefined
-      , '||': undefined
-      , '+=': undefined
-      , '-=': undefined
-      , '*=': undefined
-      , '%=': undefined
-      , '&=': undefined
-      , '|=': undefined
-      , '^=': undefined
-      , '/=': undefined
-      , '=>': undefined
-      , '**': undefined
-
-      , '===': undefined
-      , '!==': undefined
-      , '>>>': undefined
-      , '<<=': undefined
-      , '>>=': undefined
-      , '...': undefined
-      , '**=': undefined
-
-      , '>>>=': undefined
-
-      , _default: x(colors.brightYellow)
-    }
-
-      // line comment
-    , Line: {
-      _default: x(colors.brightBlack)
-      }
-
-      /* block comment */
-    , Block: {
-      _default: x(colors.brightBlack)
-      }
-
-    , _default: undefined
-    }
-  }
-}
-
-module.exports = ThemeTerminal
-
-},{"ansicolors":66,"util":17}],63:[function(require,module,exports){
-'use strict'
-
-const colors = require('ansicolors')
-const ansiRegex = require('ansi-regex')
-
-function ansiRemovedLength(s) {
-  return String(s).replace(ansiRegex(), '').length
-}
-
-function underlineString(x, underliner = '-', stringLength = ansiRemovedLength) {
-  return underliner.repeat(stringLength(x))
-}
-
-function underlineRow(headerRow) {
-  return headerRow.map(x => underlineString(x))
-}
-
-function mainHeader(s) {
-  const underline = underlineString(s, '=')
-  return colors.blue(`${s}\n${underline}`)
-}
-
-module.exports = {
-    ansiRemovedLength
-  , underlineString
-  , underlineRow
-  , mainHeader
-}
-
-},{"ansi-regex":65,"ansicolors":66}],64:[function(require,module,exports){
-'use strict'
-
-const colors = require('ansicolors')
 const severityColors = [
-    colors.green
-  , colors.blue
-  , colors.red
-]
-const browserSeverityColors = [
     'green'
   , 'blue'
   , 'dark-red'
@@ -30731,795 +30327,12 @@ function lowestSeverity(infos) {
 
 module.exports = {
     severityColors
-  , browserSeverityColors
   , MIN_SEVERITY
   , highestSeverity
   , lowestSeverity
 }
 
-},{"ansicolors":66}],65:[function(require,module,exports){
-'use strict';
-
-module.exports = () => {
-	const pattern = [
-		'[\\u001B\\u009B][[\\]()#;?]*(?:(?:(?:[a-zA-Z\\d]*(?:;[a-zA-Z\\d]*)*)?\\u0007)',
-		'(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PRZcf-ntqry=><~]))'
-	].join('|');
-
-	return new RegExp(pattern, 'g');
-};
-
-},{}],66:[function(require,module,exports){
-// ColorCodes explained: http://www.termsys.demon.co.uk/vtansi.htm
-'use strict';
-
-var colorNums = {
-      white         :  37
-    , black         :  30
-    , blue          :  34
-    , cyan          :  36
-    , green         :  32
-    , magenta       :  35
-    , red           :  31
-    , yellow        :  33
-    , brightBlack   :  90
-    , brightRed     :  91
-    , brightGreen   :  92
-    , brightYellow  :  93
-    , brightBlue    :  94
-    , brightMagenta :  95
-    , brightCyan    :  96
-    , brightWhite   :  97
-    }
-  , backgroundColorNums = {
-      bgBlack         :  40
-    , bgRed           :  41
-    , bgGreen         :  42
-    , bgYellow        :  43
-    , bgBlue          :  44
-    , bgMagenta       :  45
-    , bgCyan          :  46
-    , bgWhite         :  47
-    , bgBrightBlack   :  100
-    , bgBrightRed     :  101
-    , bgBrightGreen   :  102
-    , bgBrightYellow  :  103
-    , bgBrightBlue    :  104
-    , bgBrightMagenta :  105
-    , bgBrightCyan    :  106
-    , bgBrightWhite   :  107
-    } 
-  , open   =  {}
-  , close  =  {}
-  , colors =  {}
-  ;
-
-Object.keys(colorNums).forEach(function (k) {
-  var o =  open[k]  =  '\u001b[' + colorNums[k] + 'm';
-  var c =  close[k] =  '\u001b[39m';
-
-  colors[k] = function (s) { 
-    return o + s + c;
-  };
-});
-
-Object.keys(backgroundColorNums).forEach(function (k) {
-  var o =  open[k]  =  '\u001b[' + backgroundColorNums[k] + 'm';
-  var c =  close[k] =  '\u001b[49m';
-
-  colors[k] = function (s) { 
-    return o + s + c;
-  };
-});
-
-module.exports =  colors;
-colors.open    =  open;
-colors.close   =  close;
-
-},{}],67:[function(require,module,exports){
-module.exports = {
-    highlight: require('./lib/highlight')
-  , highlightFile: require('./lib/highlightFile')
-  , highlightFileSync: require('./lib/highlightFileSync')
-};
-
-},{"./lib/highlight":68,"./lib/highlightFile":69,"./lib/highlightFileSync":70}],68:[function(require,module,exports){
-var redeyed =  require('redeyed')
-  , theme   =  require('../themes/default')
-  , colors  =  require('ansicolors')
-
-  , colorSurround =  colors.brightBlack
-  , surroundClose =  '\u001b[39m'
-  ;
-
-function trimEmptyLines(lines) {
-
-  // remove lines from the end until we find a non-empy one
-  var line = lines.pop();
-  while(!line || !line.length)
-    line = lines.pop();
-
-  // put the non-empty line back
-  if (line) lines.push(line);
-}
-
-function addLinenos (highlightedCode, firstline) {
-  var highlightedLines = highlightedCode.split('\n');
-
-  trimEmptyLines(highlightedLines);
-
-  var linesLen = highlightedLines.length
-    , lines = []
-    , totalDigits
-    , lineno
-    ;
-
-  function getDigits (n) {
-    if (n < 10) return 1;
-    if (n < 100) return 2;
-    if (n < 1000) return 3;
-    if (n < 10000) return 4;
-    // this works for up to 99,999 lines - any questions?
-    return 5;
-  }
-
-  function pad (n, totalDigits) {
-    // not pretty, but simple and should perform quite well
-    var padDigits= totalDigits - getDigits(n);
-    switch(padDigits) {
-      case 0: return '' + n;
-      case 1: return ' ' + n;
-      case 2: return '  ' + n;
-      case 3: return '   ' + n;
-      case 4: return '    ' + n;
-      case 5: return '     ' + n;
-    }
-  }
-
-  totalDigits = getDigits(linesLen + firstline - 1);
-
-  for (var i = 0; i < linesLen; i++) {
-    // Don't close the escape sequence here in order to not break multi line code highlights like block comments
-    lineno = colorSurround(pad(i + firstline, totalDigits) + ': ').replace(surroundClose, '');
-    lines.push(lineno + highlightedLines[i]);
-  }
-
-  return lines.join('\n');
-}
-
-module.exports = function highlight (code, opts) {
-  opts = opts || { };
-  try {
-
-    var result = redeyed(code, opts.theme || theme)
-      , firstline = opts.firstline && !isNaN(opts.firstline) ? opts.firstline : 1;
-
-    return opts.linenos ? addLinenos(result.code, firstline) : result.code;
-  } catch (e) {
-    e.message = 'Unable to perform highlight. The code contained syntax errors: ' + e.message;
-    throw e;
-  }
-};
-
-},{"../themes/default":73,"ansicolors":66,"redeyed":72}],69:[function(require,module,exports){
-var fs = require('fs')
-  , highlight = require('./highlight');
-
-function isFunction (obj) {
-  return toString.call(obj) == '[object Function]';
-}
-
-module.exports = function highlightFile (fullPath, opts, cb) {
-  if (isFunction(opts)) { 
-    cb = opts;
-    opts = { };
-  }
-  opts = opts || { };
-
-  fs.readFile(fullPath, 'utf-8', function (err, code) {
-    if (err) return cb(err);
-    try {
-      cb(null, highlight(code, opts));
-    } catch (e) {
-      cb(e);
-    }
-  });
-};
-
-},{"./highlight":68,"fs":11}],70:[function(require,module,exports){
-var fs = require('fs')
-  , highlight = require('./highlight');
-
-module.exports = function highlightFileSync (fullPath, opts) {
-  var code = fs.readFileSync(fullPath, 'utf-8');
-  opts = opts || { };
-  return highlight(code, opts);
-};
-
-},{"./highlight":68,"fs":11}],71:[function(require,module,exports){
-arguments[4][1][0].apply(exports,arguments)
-},{"dup":1}],72:[function(require,module,exports){
-;(function () {
-
-'use strict';
-/*jshint laxbreak: true,  browser:true */
-/*global define*/
-
-var esprima
-  , exportFn
-  , toString = Object.prototype.toString
-  ;
-
-if (typeof module === 'object' && typeof module.exports === 'object' && typeof require === 'function') {
-  // server side
-  esprima = require('esprima');
-  exportFn = function (redeyed) { module.exports = redeyed; };
-  bootstrap(esprima, exportFn);
-} else if (typeof define === 'function' && define.amd) {
-  // client side
-  // amd
-  define(['esprima'], function (esprima) {
-      return bootstrap(esprima);
-  });
-} else if (typeof window === 'object') {
-  // no amd -> attach to window if it exists
-  // Note that this requires 'esprima' to be defined on the window, so that script has to be loaded first
-  window.redeyed = bootstrap(window.esprima);
-}
-
-function bootstrap(esprima, exportFn) {
-
-  function isFunction (obj) {
-    return toString.call(obj) === '[object Function]';
-  }
-
-  function isString (obj) {
-    return toString.call(obj) === '[object String]';
-  }
-
-  function isNumber (obj) {
-    return toString.call(obj) === '[object Number]';
-  }
-
-  function isObject (obj) {
-    return toString.call(obj) === '[object Object]';
-  }
-
-  function surroundWith (before, after) {
-    return function (s) { return before + s + after; };
-  }
-
-  function isNonCircular(key) { 
-    return key !== '_parent'; 
-  }
-
-  function objectizeString (value) {
-    var vals = value.split(':');
-
-    if (0 === vals.length || vals.length > 2) 
-      throw new Error(
-        'illegal string config: ' + value +
-        '\nShould be of format "before:after"'
-      );
-
-    if (vals.length === 1 || vals[1].length === 0) {
-      return vals.indexOf(':') < 0 ? { _before: vals[0] } : { _after: vals[0] };
-    } else {
-      return { _before: vals[0], _after: vals[1] };
-    }
-  }
-
-  function objectize (node) {
-
-    // Converts 'bef:aft' to { _before: bef, _after: aft } 
-    // and resolves undefined before/after from parent or root
-
-    function resolve (value, key) {
-      // resolve before/after from root or parent if it isn't present on the current node
-      if (!value._parent) return undefined;
-      
-      // Immediate parent
-      if (value._parent._default && value._parent._default[key]) return value._parent._default[key];
-
-      // Root
-      var root = value._parent._parent;
-      if (!root) return undefined;
-
-      return root._default ? root._default[key] : undefined;
-    }
-
-    function process (key) {
-      var value = node[key];
-
-      if (!value) return;
-      if (isFunction(value)) return;
-
-      // normalize all strings to objects
-      if (isString(value)) {
-        node[key] = value = objectizeString(value);
-      }
-      
-      value._parent = node;
-      if (isObject(value)) {
-        if (!value._before && !value._after) return objectize (value);
-
-        // resolve missing _before or _after from parent(s) 
-        // in case we only have either one on this node
-        value._before =  value._before || resolve(value, '_before');
-        value._after  =  value._after  || resolve(value, '_after');
-        
-        return;
-      } 
-
-      throw new Error('nodes need to be either {String}, {Object} or {Function}.' + value + ' is neither.');
-    }
-
-    // Process _default ones first so children can resolve missing before/after from them
-    if (node._default) process('_default');
-
-    Object.keys(node)
-      .filter(function (key) {
-        return isNonCircular(key) 
-          && node.hasOwnProperty(key)
-          && key !== '_before' 
-          && key !== '_after' 
-          && key !== '_default';
-      })
-      .forEach(process);
-  }
-
-  function functionize (node) {
-    Object.keys(node)
-      .filter(function (key) { 
-        return isNonCircular(key) && node.hasOwnProperty(key);
-      })
-      .forEach(function (key) {
-        var value = node[key];
-
-        if (isFunction(value)) return;
-
-        if (isObject(value)) {
-
-          if (!value._before && !value._after) return functionize(value);
-
-          // at this point before/after were "inherited" from the parent or root
-          // (see objectize)
-          var before = value._before || '';
-          var after = value._after || '';
-
-          node[key] = surroundWith (before, after);
-          return node[key];
-        }
-      });
-  }
-
-  function normalize (root) {
-    objectize(root);
-    functionize(root);
-  }
-
-  function mergeTokensAndComments(tokens, comments) {
-    var all = {};
-
-    function addToAllByRangeStart(t) { all[ t.range[0] ] = t; }
-
-    tokens.forEach(addToAllByRangeStart);
-    comments.forEach(addToAllByRangeStart);
-
-    // keys are sorted automatically
-    return Object.keys(all)
-      .map(function (k) { return all[k]; });
-  }
-
-  function redeyed (code, config, opts) {
-    opts = opts || {};
-    var parser = opts.parser || esprima;
-    var buildAst = !!opts.buildAst;
-
-    var hashbang =  ''
-      , ast
-      , tokens
-      , comments
-      , lastSplitEnd = 0
-      , splits = []
-      , transformedCode
-      , all
-      , info
-      ;
-
-    // Replace hashbang line with empty whitespaces to preserve token locations
-    if (code[0] === '#' && code[1] === '!') {
-      hashbang = code.substr(0, code.indexOf('\n') + 1);
-      code = Array.apply(0, Array(hashbang.length)).join(' ') + '\n' + code.substr(hashbang.length);
-    }
-
-    if (buildAst) {
-      ast = parser.parse(code, { tokens: true, comment: true, range: true, loc: true, tolerant: true });
-      tokens = ast.tokens;
-      comments = ast.comments;
-    } else {
-      tokens = [];
-      comments = [];
-      parser.tokenize(code, { range: true, loc: true, comment: true }, function (token) {
-        if (token.type === 'LineComment') {
-          token.type = 'Line';
-          comments.push(token)
-        } else if (token.type === 'BlockComment') {
-          token.type = 'Block';
-          comments.push(token)
-        } else {
-          // Optimistically upgrade 'static' to a keyword
-          if (token.type === 'Identifier' && token.value === 'static') token.type = 'Keyword';
-          tokens.push(token);
-        }
-      });
-    }
-
-    normalize(config);
-
-    function tokenIndex(tokens, tkn, start) {
-      var current
-        , rangeStart = tkn.range[0];
-
-      for (current = start; current < tokens.length; current++) {
-        if (tokens[current].range[0] === rangeStart) return current;
-      }
-
-      throw new Error('Token %s not found at or after index: %d', tkn, start);
-    }
-
-    function process(surround) {
-      var result
-        , currentIndex
-        , nextIndex
-        , skip = 0
-        , splitEnd
-        ;
-
-      result = surround(code.slice(start, end), info);
-      if (isObject(result)) {
-        splits.push(result.replacement);
-
-        currentIndex =  info.tokenIndex;
-        nextIndex    =  tokenIndex(info.tokens, result.skipPastToken, currentIndex);
-        skip         =  nextIndex - currentIndex;
-        splitEnd     =  skip > 0 ? tokens[nextIndex - 1].range[1] : end;
-      } else {
-        splits.push(result);
-        splitEnd = end;
-      }
-
-      return { skip: skip, splitEnd: splitEnd  };
-    }
-
-    function addSplit (start, end, surround, info) {
-      var result
-        , nextIndex
-        , skip = 0
-        ;
-
-      if (start >= end) return;
-      if (surround) {
-        result       =  process(surround);
-        skip         =  result.skip;
-        lastSplitEnd =  result.splitEnd;
-      } else {
-        splits.push(code.slice(start, end));
-        lastSplitEnd = end;
-      }
-
-      return skip;
-    }
-
-    all = mergeTokensAndComments(tokens, comments);
-    for (var tokenIdx = 0; tokenIdx < all.length; tokenIdx++) {
-      var token = all[tokenIdx]
-        , surroundForType = config[token.type]
-        , surround
-        , start
-        , end;
-      
-      // At least the type (e.g., 'Keyword') needs to be specified for the token to be surrounded
-      if (surroundForType) {
-
-        // root defaults are only taken into account while resolving before/after otherwise
-        // a root default would apply to everything, even if no type default was specified
-        surround = surroundForType 
-          && surroundForType.hasOwnProperty(token.value) 
-          && surroundForType[token.value]
-          && isFunction(surroundForType[token.value])
-            ? surroundForType[token.value] 
-            : surroundForType._default;
-
-        start = token.range[0];
-        end = token.range[1];
-
-        addSplit(lastSplitEnd, start);
-        info = { tokenIndex: tokenIdx, tokens: all, ast: ast, code: code };
-        tokenIdx += addSplit(start, end, surround, info);
-      }
-    }
-
-    if (lastSplitEnd < code.length) {
-      addSplit(lastSplitEnd, code.length);
-    }
-
-  if (!opts.nojoin) {
-    transformedCode = splits.join('');
-    if (hashbang.length > 0) {
-      transformedCode = hashbang + transformedCode.substr(hashbang.length);
-    }
-  }
-
-    return {
-        ast      :  ast
-      , tokens   :  tokens
-      , comments :  comments
-      , splits   :  splits
-      , code     :  transformedCode
-    };
-  }
-
-  return exportFn ? exportFn(redeyed) : redeyed;
-}
-})();
-
-},{"esprima":71}],73:[function(require,module,exports){
-var colors = require('ansicolors');
-
-// Change the below definitions in order to tweak the color theme.
-module.exports = {
-
-    'Boolean': {
-      'true'   :  undefined
-    , 'false'  :  undefined
-    , _default :  colors.brightRed
-    }
-
-  , 'Identifier': {
-      'undefined' :  colors.brightBlack
-    , 'self'      :  colors.brightRed
-    , 'console'   :  colors.blue
-    , 'log'       :  colors.blue
-    , 'warn'      :  colors.red
-    , 'error'     :  colors.brightRed
-    , _default    :  colors.white
-    }
-
-  , 'Null': {
-      _default: colors.brightBlack
-    }
-
-  , 'Numeric': {
-      _default: colors.blue
-    }
-
-  , 'String': {
-      _default: function (s, info) {
-        var nextToken = info.tokens[info.tokenIndex + 1];
-
-        // show keys of object literals and json in different color
-        return (nextToken && nextToken.type === 'Punctuator' && nextToken.value === ':')
-          ? colors.green(s)
-          : colors.brightGreen(s);
-      }
-    }
-
-  , 'Keyword': {
-      'break'       :  undefined
-
-    , 'case'        :  undefined
-    , 'catch'       :  colors.cyan
-    , 'class'       :  undefined
-    , 'const'       :  undefined
-    , 'continue'    :  undefined
-
-    , 'debugger'    :  undefined
-    , 'default'     :  undefined
-    , 'delete'      :  colors.red
-    , 'do'          :  undefined
-
-    , 'else'        :  undefined
-    , 'enum'        :  undefined
-    , 'export'      :  undefined
-    , 'extends'     :  undefined
-
-    , 'finally'     :  colors.cyan
-    , 'for'         :  undefined
-    , 'function'    :  undefined
-
-    , 'if'          :  undefined
-    , 'implements'  :  undefined
-    , 'import'      :  undefined
-    , 'in'          :  undefined
-    , 'instanceof'  :  undefined
-    , 'let'         :  undefined
-    , 'new'         :  colors.red
-    , 'package'     :  undefined
-    , 'private'     :  undefined
-    , 'protected'   :  undefined
-    , 'public'      :  undefined
-    , 'return'      :  colors.red
-    , 'static'      :  undefined
-    , 'super'       :  undefined
-    , 'switch'      :  undefined
-
-    , 'this'        :  colors.brightRed
-    , 'throw'       :  undefined
-    , 'try'         :  colors.cyan
-    , 'typeof'      :  undefined
-
-    , 'var'         :  colors.green
-    , 'void'        :  undefined
-
-    , 'while'       :  undefined
-    , 'with'        :  undefined
-    , 'yield'       :  undefined
-    , _default      :  colors.brightBlue
-  }
-  , 'Punctuator': {
-      ';': colors.brightBlack
-    , '.': colors.green
-    , ',': colors.green
-
-    , '{': colors.yellow
-    , '}': colors.yellow
-    , '(': colors.brightBlack
-    , ')': colors.brightBlack
-    , '[': colors.yellow
-    , ']': colors.yellow
-
-    , '<': undefined
-    , '>': undefined
-    , '+': undefined
-    , '-': undefined
-    , '*': undefined
-    , '%': undefined
-    , '&': undefined
-    , '|': undefined
-    , '^': undefined
-    , '!': undefined
-    , '~': undefined
-    , '?': undefined
-    , ':': undefined
-    , '=': undefined
-
-    , '<=': undefined
-    , '>=': undefined
-    , '==': undefined
-    , '!=': undefined
-    , '++': undefined
-    , '--': undefined
-    , '<<': undefined
-    , '>>': undefined
-    , '&&': undefined
-    , '||': undefined
-    , '+=': undefined
-    , '-=': undefined
-    , '*=': undefined
-    , '%=': undefined
-    , '&=': undefined
-    , '|=': undefined
-    , '^=': undefined
-    , '/=': undefined
-    , '=>': undefined
-    , '**': undefined
-
-    , '===': undefined
-    , '!==': undefined
-    , '>>>': undefined
-    , '<<=': undefined
-    , '>>=': undefined
-    , '...': undefined
-    , '**=': undefined
-
-    , '>>>=': undefined
-
-    , _default: colors.brightYellow
-  }
-
-    // line comment
-  , Line: {
-     _default: colors.brightBlack
-    }
-
-    /* block comment */
-  , Block: {
-     _default: colors.brightBlack
-    }
-
-  , _default: undefined
-};
-
-},{"ansicolors":66}],74:[function(require,module,exports){
-module.exports = function (rows_, opts) {
-    if (!opts) opts = {};
-    var hsep = opts.hsep === undefined ? '  ' : opts.hsep;
-    var align = opts.align || [];
-    var stringLength = opts.stringLength
-        || function (s) { return String(s).length; }
-    ;
-    
-    var dotsizes = reduce(rows_, function (acc, row) {
-        forEach(row, function (c, ix) {
-            var n = dotindex(c);
-            if (!acc[ix] || n > acc[ix]) acc[ix] = n;
-        });
-        return acc;
-    }, []);
-    
-    var rows = map(rows_, function (row) {
-        return map(row, function (c_, ix) {
-            var c = String(c_);
-            if (align[ix] === '.') {
-                var index = dotindex(c);
-                var size = dotsizes[ix] + (/\./.test(c) ? 1 : 2)
-                    - (stringLength(c) - index)
-                ;
-                return c + Array(size).join(' ');
-            }
-            else return c;
-        });
-    });
-    
-    var sizes = reduce(rows, function (acc, row) {
-        forEach(row, function (c, ix) {
-            var n = stringLength(c);
-            if (!acc[ix] || n > acc[ix]) acc[ix] = n;
-        });
-        return acc;
-    }, []);
-    
-    return map(rows, function (row) {
-        return map(row, function (c, ix) {
-            var n = (sizes[ix] - stringLength(c)) || 0;
-            var s = Array(Math.max(n + 1, 1)).join(' ');
-            if (align[ix] === 'r' || align[ix] === '.') {
-                return s + c;
-            }
-            if (align[ix] === 'c') {
-                return Array(Math.ceil(n / 2 + 1)).join(' ')
-                    + c + Array(Math.floor(n / 2 + 1)).join(' ')
-                ;
-            }
-            
-            return c + s;
-        }).join(hsep).replace(/\s+$/, '');
-    }).join('\n');
-};
-
-function dotindex (c) {
-    var m = /\.[^.]*$/.exec(c);
-    return m ? m.index + 1 : c.length;
-}
-
-function reduce (xs, f, init) {
-    if (xs.reduce) return xs.reduce(f, init);
-    var i = 0;
-    var acc = arguments.length >= 3 ? init : xs[i++];
-    for (; i < xs.length; i++) {
-        f(acc, xs[i], i);
-    }
-    return acc;
-}
-
-function forEach (xs, f) {
-    if (xs.forEach) return xs.forEach(f);
-    for (var i = 0; i < xs.length; i++) {
-        f.call(xs, xs[i], i);
-    }
-}
-
-function map (xs, f) {
-    if (xs.map) return xs.map(f);
-    var res = [];
-    for (var i = 0; i < xs.length; i++) {
-        res.push(f.call(xs, xs[i], i));
-    }
-    return res;
-}
-
-},{}],75:[function(require,module,exports){
+},{}],61:[function(require,module,exports){
 // Copyright 2009 the V8 project authors. All rights reserved.
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
@@ -31846,7 +30659,7 @@ if (typeof module === 'object' && typeof module.exports === 'object') {
   module.exports = CodeMap;
 } 
 
-},{"./splaytree.js":79}],76:[function(require,module,exports){
+},{"./splaytree.js":65}],62:[function(require,module,exports){
 // Copyright 2009 the V8 project authors. All rights reserved.
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
@@ -31954,7 +30767,7 @@ if (typeof module === 'object' && typeof module.exports === 'object') {
   module.exports = CsvParser;
 } 
 
-},{}],77:[function(require,module,exports){
+},{}],63:[function(require,module,exports){
 // Copyright 2011 the V8 project authors. All rights reserved.
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
@@ -32196,7 +31009,7 @@ if (typeof module === 'object' && typeof module.exports === 'object') {
   module.exports = LogReader;
 } 
 
-},{"./csvparser.js":76}],78:[function(require,module,exports){
+},{"./csvparser.js":62}],64:[function(require,module,exports){
 // Copyright 2009 the V8 project authors. All rights reserved.
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
@@ -33330,7 +32143,7 @@ JsonProfile.prototype.writeJson = function() {
   write('}\n');
 };
 
-},{"./codemap.js":75}],79:[function(require,module,exports){
+},{"./codemap.js":61}],65:[function(require,module,exports){
 // Copyright 2009 the V8 project authors. All rights reserved.
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
@@ -33663,5 +32476,5 @@ if (typeof module === 'object' && typeof module.exports === 'object') {
   module.exports = SplayTree;
 } 
 
-},{}]},{},[10])(10)
+},{}]},{},[5])(5)
 });

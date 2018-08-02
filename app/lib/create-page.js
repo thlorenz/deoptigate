@@ -18,8 +18,6 @@ return `
     <script async type="text/javascript" charset="utf-8">
       ${mainJs}
     </script>
-    <script type="application/json" id="deoptigate-data" charset="utf-8">
-    </script>
   </head>
   <body>
     <script async src="deoptigate.render-data.js"></script>

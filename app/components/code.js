@@ -64,7 +64,6 @@ class CodeView extends Component {
       , icLocations
       , codes
       , codeLocations
-      , isterminal: false
       , selectedLocation
       , includeAllSeverities
     })

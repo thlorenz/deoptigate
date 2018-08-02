@@ -6,7 +6,6 @@ const {
   , PROMPT
 } = require('files-provider')
 
-const { render } = require('../')
 const createPage = require('../app/lib/create-page')
 const { savePage, saveEntry } = require('../app/lib/save-parts')
 
@@ -14,11 +13,7 @@ const { blue } = require('ansicolors')
 const head = blue('deoptigate')
 const opener = require('opener')
 
-const {
-    logToJSON
-  , deoptigateLog
-} = require('../deoptigate.log')
-const { renderFilesSummaries } = require('../lib/rendering/file-summary.terminal')
+const { logToJSON } = require('../deoptigate.log')
 
 const provideFiles = createFilesProvider({
     single       : RETURN
@@ -30,10 +25,6 @@ const provideFiles = createFilesProvider({
 
 ;(async () => {
   try {
-    const includeAllIcs = !!(~(process.argv.indexOf('--allics')))
-    const includeIcs = includeAllIcs || !!(~(process.argv.indexOf('--ics')))
-    const browser = !(~(process.argv.indexOf('--terminal')))
-
     const root = process.cwd()
     const v8logFiles = await provideFiles.fromDirectory(root)
 
@@ -45,34 +36,19 @@ const provideFiles = createFilesProvider({
     }
 
     const v8logFile = v8logFiles[0]
-    if (browser) {
-      const json = await logToJSON(v8logFile.fullPath)
-      const html = createPage()
-      const indexHtmlFile = savePage(html)
-      saveEntry(json)
+    const json = await logToJSON(v8logFile.fullPath)
+    const html = createPage()
+    const indexHtmlFile = savePage(html)
+    saveEntry(json)
 
-        console.error(`
+      console.error(`
 ${head}: Successfully generated deoptimization visualization  🎉 ⚡ ✨
 ${head}: Saved to:
 ${head}:     ${indexHtmlFile}
 ${head}: Opening now in your default browser.
-      `)
-      opener(indexHtmlFile)
-      return
-    }
-    const icStateChangesOnly = !includeAllIcs
-    const deoptsOnly = !includeIcs
-    const { files, groups } = await deoptigateLog(v8logFile.fullPath, {
-      icStateChangesOnly
-    })
-    const rendereds = render({ files, groups }, { deoptsOnly })
-    for (const { file, highlightedCode, summary } of rendereds) {
-      console.log('\nFile: %s\n\n', file)
-      console.log(highlightedCode + '\n\n')
-      console.log(summary)
-    }
-    const filesSummaries = renderFilesSummaries(groups)
-    console.log(filesSummaries)
+    `)
+    opener(indexHtmlFile)
+    return
   } catch (err) {
     console.error(err)
   }

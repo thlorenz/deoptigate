@@ -4,7 +4,6 @@
 
 const LogReader = require('v8-tools-core/logreader')
 const { Profile } = require('v8-tools-core/profile')
-const { highlight } = require('cardinal')
 
 const IcEntry = require('./lib/log-processing/ic-entry')
 const DeoptEntry = require('./lib/log-processing/deopt-entry')
@@ -12,10 +11,6 @@ const CodeEntry = require('./lib/log-processing/code-entry')
 const { parseOptimizationState } = require('./lib/log-processing/optimization-state')
 
 const groupByFileAndLocation = require('./lib/grouping/group-by-file-and-location')
-
-const Theme = require('./lib/rendering/theme.terminal')
-const SummaryRenderer = require('./lib/rendering/render-summary.terminal')
-const MarkerResolver = require('./lib/rendering/marker-resolver')
 
 function maybeNumber(s) {
   if (s == null) return -1
@@ -49,7 +44,7 @@ class DeoptProcessor extends LogReader {
     this._root = root
     this._silentErrors = silentErrors
 
-    // pasing dispatch table that references `this` before invoking super
+    // passing dispatch table that references `this` before invoking super
     // doesn't work, so we set it afterwards
     this.dispatchTable_ = {
 
@@ -274,43 +269,7 @@ function deoptigate(groupedByFile) {
   return groupedByFileAndLocation
 }
 
-function render({ files, groups }, {
-    isterminal = true
-  , deoptsOnly = true
-  , filerFilter = null
-} = {}) {
-  const results = []
-  for (const [ file, info ] of groups) {
-    let { ics, deopts, icLocations, deoptLocations } = info
-    if (deoptsOnly) {
-      ics = null
-      icLocations = null
-    }
-    const code = files.get(file).src
-    const markerResolver = new MarkerResolver({
-        deopts
-      , deoptLocations
-      , ics
-      , icLocations
-      , isterminal
-    })
-    const summaryRenderer = new SummaryRenderer({
-        deopts
-      , deoptLocations
-      , ics
-      , icLocations
-    })
-    const theme = new Theme(markerResolver).theme
-    const highlightedCode = highlight(code, { theme, linenos: true })
-    const summary = summaryRenderer.render()
-
-    results.push({ file, highlightedCode, summary })
-  }
-  return results
-}
-
 module.exports = {
     processLogContent
-  , render
   , deoptigate
 }
