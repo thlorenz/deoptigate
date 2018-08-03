@@ -1,55 +1,22 @@
 #!/usr/bin/env node
 
-const {
-    createFilesProvider
-  , RETURN
-  , PROMPT
-} = require('files-provider')
+const { blue, red } = require('ansicolors')
+const simpleHead = blue('deoptigate')
+const happyHead = blue('deoptigate 💪')
+const errorHead = red('deoptigate 🚫')
 
-const createPage = require('../app/lib/create-page')
-const { savePage, saveEntry } = require('../app/lib/save-parts')
-
-const { blue } = require('ansicolors')
-const head = blue('deoptigate')
-const opener = require('opener')
-
-const { logToJSON } = require('../deoptigate.log')
-
-const provideFiles = createFilesProvider({
-    single       : RETURN
-  , multi        : PROMPT
-  , choiceAll    : false
-  , promptHeader : head + ': please select a v8.log file to open: '
-  , regex        : /^(isolate-.+-)?v8.log$/
-})
+const openLog = require('./deoptigate.open-log')
+const findLog = require('./deoptigate.find-log')
+const createLog = require('./deoptigate.create-log')
 
 ;(async () => {
   try {
-    const root = process.cwd()
-    const v8logFiles = await provideFiles.fromDirectory(root)
-
-    if (v8logFiles.length === 0) {
-      console.error(head + ': Problem:\n')
-      console.error(head + ': Unable to find a v8.log or isolate-*-v8.log in the current directory.')
-      console.error(head + ': Please produce it via "<node|d8> --trace-ic app.js"')
-      return
-    }
-
-    const v8logFile = v8logFiles[0]
-    const json = await logToJSON(v8logFile.fullPath)
-    const html = createPage()
-    const indexHtmlFile = savePage(html)
-    saveEntry(json)
-
-      console.error(`
-${head}: Successfully generated deoptimization visualization  🎉 ⚡ ✨
-${head}: Saved to:
-${head}:     ${indexHtmlFile}
-${head}: Opening now in your default browser.
-    `)
-    opener(indexHtmlFile)
-    return
+    const log = (process.argv.length <= 2
+      ? await findLog(happyHead)
+      : await createLog(process.argv.slice(2), happyHead, simpleHead)
+    )
+    await openLog(log, happyHead)
   } catch (err) {
-    console.error(err)
+    console.error(`${errorHead}: ${err}`)
   }
 })()
