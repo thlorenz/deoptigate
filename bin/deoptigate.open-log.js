@@ -7,7 +7,7 @@ const createPage = require('../app/lib/create-page')
 const { savePage, saveEntry } = require('../app/lib/save-parts')
 
 async function openLog(v8log, head) {
-    const json = await logToJSON(v8log)
+    const json = await logToJSON(v8log, { root: process.cwd() })
     const html = createPage()
     const indexHtmlFile = savePage(html)
     saveEntry(json)
