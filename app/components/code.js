@@ -10,6 +10,17 @@ const { highlight } = require('peacock')
 const Theme = require('../theme.browser')
 const MarkerResolver = require('../../lib/rendering/marker-resolver')
 
+function tryHighlightCode(code, theme) {
+  try {
+    return highlight(code, { theme, linenos: true })
+  } catch (err) {
+    return `
+      <p>Deoptigate was unable to highlight the below code</p>
+      <pre style='whitespace: pre'>${code}</pre>
+    `
+  }
+}
+
 class CodeView extends Component {
   constructor(props) {
     super()
@@ -69,7 +80,7 @@ class CodeView extends Component {
     })
 
     const theme = new Theme(markerResolver).theme
-    const highlightedCode = highlight(code, { theme, linenos: true })
+    const highlightedCode = tryHighlightCode(code, theme)
     return (
       <div className={className}>
         <div dangerouslySetInnerHTML={{__html: highlightedCode}} />
