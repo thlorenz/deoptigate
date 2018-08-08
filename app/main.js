@@ -5,10 +5,12 @@ const { Component } = React
 const { render } = require('react-dom')
 const { deoptigate } = require('../')
 
-const { CodeView } = require('./components/code')
-const { SummaryView } = require('./components/summary')
 const { ToolbarView } = require('./components/toolbar')
 const { FilesView } = require('./components/files')
+const { FileDetailsView } = require('./components/file-details')
+
+const FILES_TAB_IDX = 0
+const DETAILS_TAB_IDX = 1
 
 function app() {
   // makes React happy
@@ -25,6 +27,7 @@ class MainView extends Component {
         selectedFile: null
       , selectedLocation: 2
       , includeAllSeverities: false
+      , selectedTabIdx: FILES_TAB_IDX
     }
     this._bind()
   }
@@ -36,75 +39,99 @@ class MainView extends Component {
   }
 
   render() {
-    const { groups } = this.props
-    const { selectedFile, includeAllSeverities } = this.state
-    const fileDetailsClassName = 'flex flex-row justify-center ma2'
-    const fileDetails = this._renderFileDetails(fileDetailsClassName)
+    const { includeAllSeverities } = this.state
 
+    const tabs = this._renderTabs()
     return (
-      <div className='flex-column center mw9 pa2'>
-        <ToolbarView
-          className='flex flex-row justify-center'
-          includeAllSeverities={includeAllSeverities}
-          onincludeAllSeveritiesChanged={this._onincludeAllSeveritiesChanged} />
-        <FilesView
-          className='flex flex-row justify-center vh-15 overflow-scroll'
-          selectedFile={selectedFile}
-          groups={groups}
-          includeAllSeverities={includeAllSeverities}
-          onfileClicked={this._onfileClicked} />
-        {fileDetails}
+      <div className='center mw9 pa2'>
+        <div className='flex flex-row'>
+          {this._renderTabHeader('Files', FILES_TAB_IDX)}
+          {this._renderTabHeader('Details', DETAILS_TAB_IDX)}
+          <ToolbarView
+            className='flex flex-column self-center ml4 pl4 bl bw1 b--silver'
+            includeAllSeverities={includeAllSeverities}
+            onincludeAllSeveritiesChanged={this._onincludeAllSeveritiesChanged} />
+        </div>
+        {tabs}
       </div>
     )
   }
 
-  _renderFileDetails(className) {
-    const { groups } = this.props
-    const { selectedFile, selectedLocation, includeAllSeverities } = this.state
-    if (selectedFile == null || !groups.has(selectedFile)) {
-      return (
-        <div className={className}>Please selecte a file in the above table</div>
-      )
-    }
-    const {
-        ics
-      , icLocations
-      , deopts
-      , deoptLocations
-      , codes
-      , codeLocations
-      , src
-      , relativePath
-    } = groups.get(selectedFile)
+  /*
+   * Tabs
+   */
+
+  _renderTabHeader(label, idx) {
+    const { selectedTabIdx } = this.state
+    const selected = idx === selectedTabIdx
+    const baseClass = 'flex flex-column ttu dib link pa3 bt outline-0 tab-header'
+    const selectedClass = 'b--blue blue'
+    const unselectedClass = 'black b--white'
+    const className = selected ? `${baseClass} ${selectedClass}` : `${baseClass} ${unselectedClass}`
+
+    return <a className={className} href='#' onClick={() => this._ontabHeaderClicked(idx)}>{label}</a>
+  }
+
+  _renderTabs() {
+    const { selectedTabIdx } = this.state
+    const files = this._renderFiles(selectedTabIdx === FILES_TAB_IDX)
+    const details = this._renderFileDetails(selectedTabIdx === DETAILS_TAB_IDX)
     return (
-      <div className={className}>
-        <CodeView
-          className='flex-column vh-85 w-50 overflow-scroll code-view'
-          selectedLocation={selectedLocation}
-          code={src}
-          ics={ics}
-          icLocations={icLocations}
-          deopts={deopts}
-          deoptLocations={deoptLocations}
-          codes={codes}
-          codeLocations={codeLocations}
-          includeAllSeverities={includeAllSeverities}
-          onmarkerClicked={this._onlocationSelected} />
-        <SummaryView
-          className='flex-column vh-85 w-50 overflow-scroll'
-          file={selectedFile}
-          relativePath={relativePath}
-          selectedLocation={selectedLocation}
-          ics={ics}
-          icLocations={icLocations}
-          deopts={deopts}
-          deoptLocations={deoptLocations}
-          codes={codes}
-          codeLocations={codeLocations}
-          includeAllSeverities={includeAllSeverities}
-          onsummaryClicked={this._onlocationSelected} />
+      <div className='flex flex-row vh-100 overflow-scroll'>
+        {files}
+        {details}
       </div>
     )
+  }
+
+  /*
+   * Contents
+   */
+  _renderFiles(selected) {
+    const { groups } = this.props
+    const { selectedFile, includeAllSeverities } = this.state
+    const display = selected ? 'flex' : 'dn'
+    const className = `${display} flex-row justify-center vh-90 overflow-scroll`
+
+    return (
+      <FilesView
+        className={className}
+        selectedFile={selectedFile}
+        groups={groups}
+        includeAllSeverities={includeAllSeverities}
+        onfileClicked={this._onfileClicked} />
+    )
+  }
+
+  _renderFileDetails(selected) {
+    const { groups } = this.props
+    const { selectedFile, selectedLocation, includeAllSeverities } = this.state
+    const display = selected ? 'flex' : 'dn'
+    const className = `${display} flex-row justify-center ma2`
+    if (selectedFile == null || !groups.has(selectedFile)) {
+      return (
+        <div className={className}>Please select a file in the Files table</div>
+      )
+    }
+
+    return (
+      <FileDetailsView
+        groups={groups}
+        selectedFile={selectedFile}
+        selectedLocation={selectedLocation}
+        includeAllSeverities={includeAllSeverities}
+        className={className}
+        onmarkerClicked={this._onlocationSelected}
+        onsummaryClicked={this._onlocationSelected}
+      />
+    )
+  }
+
+  /*
+   * Events
+   */
+  _ontabHeaderClicked(idx) {
+    this.setState(Object.assign(this.state, { selectedTabIdx: idx }))
   }
 
   _onlocationSelected(id) {
@@ -116,7 +143,12 @@ class MainView extends Component {
   }
 
   _onfileClicked(file) {
-    this.setState(Object.assign(this.state, { selectedFile: file, selectedLocation: null }))
+    this.setState(Object.assign(this.state, {
+        selectedFile: file
+      , selectedLocation: null
+      // auto open details view when file is sected
+      , selectedTabIdx: DETAILS_TAB_IDX
+    }))
   }
 }
 

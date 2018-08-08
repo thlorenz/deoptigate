@@ -38,11 +38,11 @@ class CodeView extends Component {
     const rootEl = ReactDOM.findDOMNode(this)
     rootEl.addEventListener('click', event => {
       const tgt = event.target
-      const { markerid } = tgt.dataset
+      const { markerid, markertype } = tgt.dataset
       if (markerid == null) return
       event.preventDefault()
       event.stopPropagation()
-      this._onmarkerClicked(parseInt(markerid))
+      this._onmarkerClicked(parseInt(markerid), markertype)
     })
   }
 
@@ -52,6 +52,15 @@ class CodeView extends Component {
     const code = document.getElementById(`code-location-${selectedLocation}`)
     if (code == null) return
     scrollIntoView(code, { behavior: 'smooth', scrollMode: 'if-needed' })
+  }
+
+  shouldComponentUpdate(nextProps) {
+    const props = this.props
+    return (
+         props.code !== nextProps.code
+      || props.selectedLocation !== nextProps.selectedLocation
+      || props.includeAllSeverities !== nextProps.includeAllSeverities
+    )
   }
 
   render() {
@@ -88,9 +97,9 @@ class CodeView extends Component {
     )
   }
 
-  _onmarkerClicked(id) {
+  _onmarkerClicked(id, type) {
     const { onmarkerClicked } = this.props
-    onmarkerClicked(id)
+    onmarkerClicked(id, type)
   }
 }
 

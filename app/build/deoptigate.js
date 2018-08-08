@@ -39,11 +39,11 @@ class CodeView extends Component {
     const rootEl = ReactDOM.findDOMNode(this)
     rootEl.addEventListener('click', event => {
       const tgt = event.target
-      const { markerid } = tgt.dataset
+      const { markerid, markertype } = tgt.dataset
       if (markerid == null) { return }
       event.preventDefault()
       event.stopPropagation()
-      this._onmarkerClicked(parseInt(markerid))
+      this._onmarkerClicked(parseInt(markerid), markertype)
     })
   }
 
@@ -53,6 +53,15 @@ class CodeView extends Component {
     const code = document.getElementById(`code-location-${selectedLocation}`)
     if (code == null) { return }
     scrollIntoView(code, { behavior: 'smooth', scrollMode: 'if-needed' })
+  }
+
+  shouldComponentUpdate(nextProps) {
+    const props = this.props
+    return (
+         props.code !== nextProps.code
+      || props.selectedLocation !== nextProps.selectedLocation
+      || props.includeAllSeverities !== nextProps.includeAllSeverities
+    )
   }
 
   render() {
@@ -89,9 +98,9 @@ class CodeView extends Component {
     )
   }
 
-  _onmarkerClicked(id) {
+  _onmarkerClicked(id, type) {
     const { onmarkerClicked } = this.props
-    onmarkerClicked(id)
+    onmarkerClicked(id, type)
   }
 }
 
@@ -99,7 +108,79 @@ module.exports = {
   CodeView
 }
 
-},{"../../lib/rendering/marker-resolver":59,"../theme.browser":49,"assert":6,"peacock":14,"react":39,"react-dom":19,"scroll-into-view-if-needed":47}],2:[function(require,module,exports){
+},{"../../lib/rendering/marker-resolver":60,"../theme.browser":50,"assert":7,"peacock":15,"react":40,"react-dom":20,"scroll-into-view-if-needed":48}],2:[function(require,module,exports){
+'use strict'
+
+const React = require('react')
+const { Component } = React
+
+const { CodeView } = require('./code')
+const { SummaryView } = require('./summary')
+
+class FileDetailsView extends Component {
+  constructor(props) {
+    super(props)
+    this.state = { selectedSummaryTabIdx: SummaryView.OPT_TAB_IDX }
+    this._bind()
+  }
+
+  _bind() {
+    this._onmarkerClicked = this._onmarkerClicked.bind(this)
+    this._onsummaryTabHeaderClicked = this._onsummaryTabHeaderClicked.bind(this)
+  }
+
+  render() {
+    const {
+        groups
+      , selectedFile
+      , selectedLocation
+      , includeAllSeverities
+      , className = ''
+      , onsummaryClicked
+    } = this.props
+
+    const { selectedSummaryTabIdx } = this.state
+
+    const {
+        ics
+      , icLocations
+      , deopts
+      , deoptLocations
+      , codes
+      , codeLocations
+      , src
+      , relativePath
+    } = groups.get(selectedFile)
+
+    return (
+      React.createElement( 'div', { className: className },
+        React.createElement( CodeView, {
+          className: 'flex-column vh-85 w-50 overflow-scroll code-view', selectedLocation: selectedLocation, code: src, ics: ics, icLocations: icLocations, deopts: deopts, deoptLocations: deoptLocations, codes: codes, codeLocations: codeLocations, includeAllSeverities: includeAllSeverities, onmarkerClicked: this._onmarkerClicked }),
+        React.createElement( SummaryView, {
+          className: 'flex-column vh-85 w-50 overflow-scroll', file: selectedFile, relativePath: relativePath, selectedLocation: selectedLocation, ics: ics, icLocations: icLocations, deopts: deopts, deoptLocations: deoptLocations, codes: codes, codeLocations: codeLocations, includeAllSeverities: includeAllSeverities, selectedTabIdx: selectedSummaryTabIdx, ontabHeaderClicked: this._onsummaryTabHeaderClicked, onsummaryClicked: onsummaryClicked })
+      )
+    )
+  }
+
+  _onmarkerClicked(id, type) {
+    const { onmarkerClicked } = this.props
+    const selectedSummaryTabIdx = (
+        type === 'code' ? SummaryView.OPT_TAB_IDX
+      : type === 'deopt' ? SummaryView.DEOPT_TAB_IDX
+      : SummaryView.ICS_TAB_IDX
+    )
+    this.setState(Object.assign(this.state, { selectedSummaryTabIdx }))
+    onmarkerClicked(id)
+  }
+
+  _onsummaryTabHeaderClicked(idx) {
+    this.setState(Object.assign(this.state, { selectedSummaryTabIdx: idx }))
+  }
+}
+
+module.exports = { FileDetailsView }
+
+},{"./code":1,"./summary":4,"react":40}],3:[function(require,module,exports){
 'use strict'
 
 const React = require('react')
@@ -244,7 +325,7 @@ class FilesView extends Component {
 
 module.exports = { FilesView }
 
-},{"../../lib/grouping/summarize-file":53,"assert":6,"react":39}],3:[function(require,module,exports){
+},{"../../lib/grouping/summarize-file":54,"assert":7,"react":40}],4:[function(require,module,exports){
 'use strict'
 
 const React = require('react')
@@ -265,14 +346,19 @@ const severityClassNames = [
   , 'red b'
 ]
 
+const OPT_TAB_IDX = 0
+const DEOPT_TAB_IDX = 1
+const ICS_TAB_IDX = 2
+
 class SummaryView extends Component {
   constructor(props) {
     super(props)
-    const { ics, icLocations, deopts, deoptLocations, onsummaryClicked } = props
+    const { ics, icLocations, deopts, deoptLocations, onsummaryClicked, ontabHeaderClicked } = props
 
     assert(ics == null || icLocations != null, 'need to provide locations for ics')
     assert(deopts == null || deoptLocations != null, 'need to provide locations for deopts')
     assert.equal(typeof onsummaryClicked, 'function', 'need to pass onsummaryClicked function')
+    assert.equal(typeof ontabHeaderClicked, 'function', 'need to pass ontabHeaderClicked function')
 
     this._bind()
   }
@@ -300,21 +386,45 @@ class SummaryView extends Component {
       , deoptLocations
       , codes
       , codeLocations
+      , selectedTabIdx
     } = this.props
-    const renderedDeopts = this._renderDeopts(deopts, deoptLocations)
-    const renderedIcs = this._renderIcs(ics, icLocations)
-    const renderedCodes = this._renderCodes(codes, codeLocations)
+    const renderedDeopts = this._renderDeopts(deopts, deoptLocations, selectedTabIdx === DEOPT_TAB_IDX)
+    const renderedIcs = this._renderIcs(ics, icLocations, selectedTabIdx === ICS_TAB_IDX)
+    const renderedCodes = this._renderCodes(codes, codeLocations, selectedTabIdx === OPT_TAB_IDX)
     return (
       React.createElement( 'div', { className: className },
-        renderedCodes,
-        renderedDeopts,
-        renderedIcs
+        React.createElement( 'div', { className: 'flex flex-row' },
+          this._renderTabHeader('Optimizations', OPT_TAB_IDX),
+          this._renderTabHeader('Deoptimizations', DEOPT_TAB_IDX),
+          this._renderTabHeader('Incline Caches', ICS_TAB_IDX)
+        ),
+        React.createElement( 'div', null,
+          renderedCodes,
+          renderedDeopts,
+          renderedIcs
+        )
       )
     )
   }
 
+  /*
+   * Tabs
+   */
+
+  _renderTabHeader(label, idx) {
+    const { selectedTabIdx } = this.props
+    const selected = idx === selectedTabIdx
+    const baseClass = 'flex flex-column ttu dib link pa3 bt outline-0 tab-header'
+    const selectedClass = 'b--blue blue'
+    const unselectedClass = 'black b--white'
+    const className = selected ? `${baseClass} ${selectedClass}` : `${baseClass} ${unselectedClass}`
+
+    return React.createElement( 'a', { className: className, href: '#', onClick: () => this._ontabHeaderClicked(idx) }, label)
+  }
+
   _renderDataPoint(data, locations, renderDetails) {
     const { selectedLocation, includeAllSeverities, relativePath } = this.props
+    if (locations.length === 0) { return React.createElement( 'h4', { className: 'ml4' }, "None") }
     const rendered = []
     for (const loc of locations) {
       const info = data.get(loc)
@@ -332,34 +442,34 @@ class SummaryView extends Component {
     return rendered
   }
 
-  _renderIcs(ics, icLocations) {
+  _renderIcs(ics, icLocations, selected) {
     if (ics == null) { return null }
+    const className = selected ? '' : 'dn'
     const rendered = this._renderDataPoint(ics, icLocations, this._renderIc)
     return (
-      React.createElement( 'div', { key: 'ics' },
-        React.createElement( 'h4', { className: 'underline' }, "Inline Caches"),
+      React.createElement( 'div', { key: 'ics', className: className },
         rendered
       )
     )
   }
 
-  _renderDeopts(deopts, deoptLocations) {
+  _renderDeopts(deopts, deoptLocations, selected) {
     if (deopts == null) { return null }
+    const className = selected ? '' : 'dn'
     const rendered = this._renderDataPoint(deopts, deoptLocations, this._renderDeopt)
     return (
-      React.createElement( 'div', { key: 'deopts' },
-        React.createElement( 'h4', { className: 'underline' }, "Deoptimizations"),
+      React.createElement( 'div', { key: 'deopts', className: className },
         rendered
       )
     )
   }
 
-  _renderCodes(codes, codeLocations, relativePath) {
+  _renderCodes(codes, codeLocations, selected) {
     if (codes == null) { return null }
+    const className = selected ? '' : 'dn'
     const rendered = this._renderDataPoint(codes, codeLocations, this._renderCode)
     return (
-      React.createElement( 'div', { key: 'optimizations' },
-        React.createElement( 'h4', { className: 'underline' }, "Optimizations"),
+      React.createElement( 'div', { key: 'optimizations', className: className },
         rendered
       )
     )
@@ -508,16 +618,28 @@ class SummaryView extends Component {
     )
   }
 
+  /*
+   * Events
+   */
+  _ontabHeaderClicked(idx) {
+    const { ontabHeaderClicked } = this.props
+    ontabHeaderClicked(idx)
+  }
+
   _onsummaryClicked(id) {
     const { onsummaryClicked } = this.props
     onsummaryClicked(id)
   }
+
+  static get OPT_TAB_IDX() { return OPT_TAB_IDX }
+  static get DEOPT_TAB_IDX() { return DEOPT_TAB_IDX }
+  static get ICS_TAB_IDX() { return ICS_TAB_IDX }
 }
 module.exports = {
   SummaryView
 }
 
-},{"../../lib/log-processing/ic-state":57,"../../lib/log-processing/optimization-state":58,"../../lib/severities":60,"assert":6,"react":39,"scroll-into-view-if-needed":47}],4:[function(require,module,exports){
+},{"../../lib/log-processing/ic-state":58,"../../lib/log-processing/optimization-state":59,"../../lib/severities":61,"assert":7,"react":40,"scroll-into-view-if-needed":48}],5:[function(require,module,exports){
 'use strict'
 
 const React = require('react')
@@ -566,7 +688,7 @@ module.exports = {
   ToolbarView
 }
 
-},{"assert":6,"react":39}],5:[function(require,module,exports){
+},{"assert":7,"react":40}],6:[function(require,module,exports){
 'use strict'
 
 const React = require('react')
@@ -574,10 +696,12 @@ const { Component } = React
 const { render } = require('react-dom')
 const { deoptigate } = require('../')
 
-const { CodeView } = require('./components/code')
-const { SummaryView } = require('./components/summary')
 const { ToolbarView } = require('./components/toolbar')
 const { FilesView } = require('./components/files')
+const { FileDetailsView } = require('./components/file-details')
+
+const FILES_TAB_IDX = 0
+const DETAILS_TAB_IDX = 1
 
 function app() {
   // makes React happy
@@ -594,6 +718,7 @@ class MainView extends Component {
         selectedFile: null
       , selectedLocation: 2
       , includeAllSeverities: false
+      , selectedTabIdx: FILES_TAB_IDX
     }
     this._bind()
   }
@@ -605,48 +730,86 @@ class MainView extends Component {
   }
 
   render() {
-    const { groups } = this.props
-    const { selectedFile, includeAllSeverities } = this.state
-    const fileDetailsClassName = 'flex flex-row justify-center ma2'
-    const fileDetails = this._renderFileDetails(fileDetailsClassName)
+    const { includeAllSeverities } = this.state
 
+    const tabs = this._renderTabs()
     return (
-      React.createElement( 'div', { className: 'flex-column center mw9 pa2' },
-        React.createElement( ToolbarView, {
-          className: 'flex flex-row justify-center', includeAllSeverities: includeAllSeverities, onincludeAllSeveritiesChanged: this._onincludeAllSeveritiesChanged }),
-        React.createElement( FilesView, {
-          className: 'flex flex-row justify-center vh-15 overflow-scroll', selectedFile: selectedFile, groups: groups, includeAllSeverities: includeAllSeverities, onfileClicked: this._onfileClicked }),
-        fileDetails
+      React.createElement( 'div', { className: 'center mw9 pa2' },
+        React.createElement( 'div', { className: 'flex flex-row' },
+          this._renderTabHeader('Files', FILES_TAB_IDX),
+          this._renderTabHeader('Details', DETAILS_TAB_IDX),
+          React.createElement( ToolbarView, {
+            className: 'flex flex-column self-center ml4 pl4 bl bw1 b--silver', includeAllSeverities: includeAllSeverities, onincludeAllSeveritiesChanged: this._onincludeAllSeveritiesChanged })
+        ),
+        tabs
       )
     )
   }
 
-  _renderFileDetails(className) {
-    const { groups } = this.props
-    const { selectedFile, selectedLocation, includeAllSeverities } = this.state
-    if (selectedFile == null || !groups.has(selectedFile)) {
-      return (
-        React.createElement( 'div', { className: className }, "Please selecte a file in the above table")
-      )
-    }
-    const {
-        ics
-      , icLocations
-      , deopts
-      , deoptLocations
-      , codes
-      , codeLocations
-      , src
-      , relativePath
-    } = groups.get(selectedFile)
+  /*
+   * Tabs
+   */
+
+  _renderTabHeader(label, idx) {
+    const { selectedTabIdx } = this.state
+    const selected = idx === selectedTabIdx
+    const baseClass = 'flex flex-column ttu dib link pa3 bt outline-0 tab-header'
+    const selectedClass = 'b--blue blue'
+    const unselectedClass = 'black b--white'
+    const className = selected ? `${baseClass} ${selectedClass}` : `${baseClass} ${unselectedClass}`
+
+    return React.createElement( 'a', { className: className, href: '#', onClick: () => this._ontabHeaderClicked(idx) }, label)
+  }
+
+  _renderTabs() {
+    const { selectedTabIdx } = this.state
+    const files = this._renderFiles(selectedTabIdx === FILES_TAB_IDX)
+    const details = this._renderFileDetails(selectedTabIdx === DETAILS_TAB_IDX)
     return (
-      React.createElement( 'div', { className: className },
-        React.createElement( CodeView, {
-          className: 'flex-column vh-85 w-50 overflow-scroll code-view', selectedLocation: selectedLocation, code: src, ics: ics, icLocations: icLocations, deopts: deopts, deoptLocations: deoptLocations, codes: codes, codeLocations: codeLocations, includeAllSeverities: includeAllSeverities, onmarkerClicked: this._onlocationSelected }),
-        React.createElement( SummaryView, {
-          className: 'flex-column vh-85 w-50 overflow-scroll', file: selectedFile, relativePath: relativePath, selectedLocation: selectedLocation, ics: ics, icLocations: icLocations, deopts: deopts, deoptLocations: deoptLocations, codes: codes, codeLocations: codeLocations, includeAllSeverities: includeAllSeverities, onsummaryClicked: this._onlocationSelected })
+      React.createElement( 'div', { className: 'flex flex-row vh-100 overflow-scroll' },
+        files,
+        details
       )
     )
+  }
+
+  /*
+   * Contents
+   */
+  _renderFiles(selected) {
+    const { groups } = this.props
+    const { selectedFile, includeAllSeverities } = this.state
+    const display = selected ? 'flex' : 'dn'
+    const className = `${display} flex-row justify-center vh-90 overflow-scroll`
+
+    return (
+      React.createElement( FilesView, {
+        className: className, selectedFile: selectedFile, groups: groups, includeAllSeverities: includeAllSeverities, onfileClicked: this._onfileClicked })
+    )
+  }
+
+  _renderFileDetails(selected) {
+    const { groups } = this.props
+    const { selectedFile, selectedLocation, includeAllSeverities } = this.state
+    const display = selected ? 'flex' : 'dn'
+    const className = `${display} flex-row justify-center ma2`
+    if (selectedFile == null || !groups.has(selectedFile)) {
+      return (
+        React.createElement( 'div', { className: className }, "Please select a file in the Files table")
+      )
+    }
+
+    return (
+      React.createElement( FileDetailsView, {
+        groups: groups, selectedFile: selectedFile, selectedLocation: selectedLocation, includeAllSeverities: includeAllSeverities, className: className, onmarkerClicked: this._onlocationSelected, onsummaryClicked: this._onlocationSelected })
+    )
+  }
+
+  /*
+   * Events
+   */
+  _ontabHeaderClicked(idx) {
+    this.setState(Object.assign(this.state, { selectedTabIdx: idx }))
   }
 
   _onlocationSelected(id) {
@@ -658,7 +821,12 @@ class MainView extends Component {
   }
 
   _onfileClicked(file) {
-    this.setState(Object.assign(this.state, { selectedFile: file, selectedLocation: null }))
+    this.setState(Object.assign(this.state, {
+        selectedFile: file
+      , selectedLocation: null
+      // auto open details view when file is sected
+      , selectedTabIdx: DETAILS_TAB_IDX
+    }))
   }
 }
 
@@ -677,7 +845,7 @@ async function deoptigateRender(groupedByFile) {
 
 module.exports = deoptigateRender
 
-},{"../":50,"./components/code":1,"./components/files":2,"./components/summary":3,"./components/toolbar":4,"react":39,"react-dom":19}],6:[function(require,module,exports){
+},{"../":51,"./components/file-details":2,"./components/files":3,"./components/toolbar":5,"react":40,"react-dom":20}],7:[function(require,module,exports){
 (function (global){
 'use strict';
 
@@ -1171,7 +1339,7 @@ var objectKeys = Object.keys || function (obj) {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"util/":9}],7:[function(require,module,exports){
+},{"util/":10}],8:[function(require,module,exports){
 if (typeof Object.create === 'function') {
   // implementation from standard node.js 'util' module
   module.exports = function inherits(ctor, superCtor) {
@@ -1196,14 +1364,14 @@ if (typeof Object.create === 'function') {
   }
 }
 
-},{}],8:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 module.exports = function isBuffer(arg) {
   return arg && typeof arg === 'object'
     && typeof arg.copy === 'function'
     && typeof arg.fill === 'function'
     && typeof arg.readUInt8 === 'function';
 }
-},{}],9:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 (function (process,global){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -1793,7 +1961,7 @@ function hasOwnProperty(obj, prop) {
 }
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./support/isBuffer":8,"_process":11,"inherits":7}],10:[function(require,module,exports){
+},{"./support/isBuffer":9,"_process":12,"inherits":8}],11:[function(require,module,exports){
 (function (process){
 // .dirname, .basename, and .extname methods are extracted from Node.js v8.11.1,
 // backported and transplited with Babel, with backwards-compat fixes
@@ -2099,7 +2267,7 @@ var substr = 'ab'.substr(-1) === 'b'
 ;
 
 }).call(this,require('_process'))
-},{"_process":11}],11:[function(require,module,exports){
+},{"_process":12}],12:[function(require,module,exports){
 // shim for using process in browser
 var process = module.exports = {};
 
@@ -2285,7 +2453,7 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}],12:[function(require,module,exports){
+},{}],13:[function(require,module,exports){
 (function webpackUniversalModuleDefinition(root, factory) {
 /* istanbul ignore next */
 	if(typeof exports === 'object' && typeof module === 'object')
@@ -8995,7 +9163,7 @@ return /******/ (function(modules) { // webpackBootstrap
 /******/ ])
 });
 ;
-},{}],13:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 ;(function() {
 'use strict'
 /* global define */
@@ -9310,7 +9478,7 @@ function bootstrap(esprima, exportFn) {
 }
 })()
 
-},{"esprima":12}],14:[function(require,module,exports){
+},{"esprima":13}],15:[function(require,module,exports){
 (function (__dirname){
 'use strict'
 
@@ -9454,7 +9622,7 @@ module.exports = {
 }
 
 }).call(this,"/node_modules/peacock")
-},{"./spans":15,"./themes/default":16,"path":10,"redeyed":13}],15:[function(require,module,exports){
+},{"./spans":16,"./themes/default":17,"path":11,"redeyed":14}],16:[function(require,module,exports){
 'use strict'
 
 var classes = {
@@ -9539,7 +9707,7 @@ Object.keys(classes)
 module.exports = spans
 module.exports.classes = classes
 
-},{}],16:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 var spans = require('../spans')
 
 module.exports = {
@@ -9730,7 +9898,7 @@ module.exports = {
   , _default: undefined
 }
 
-},{"../spans":15}],17:[function(require,module,exports){
+},{"../spans":16}],18:[function(require,module,exports){
 (function (process){
 /** @license React v16.3.3
  * react-dom.development.js
@@ -26388,7 +26556,7 @@ module.exports = reactDom;
 }
 
 }).call(this,require('_process'))
-},{"_process":11,"fbjs/lib/ExecutionEnvironment":20,"fbjs/lib/camelizeStyleName":22,"fbjs/lib/containsNode":23,"fbjs/lib/emptyFunction":24,"fbjs/lib/emptyObject":25,"fbjs/lib/getActiveElement":26,"fbjs/lib/hyphenateStyleName":28,"fbjs/lib/invariant":29,"fbjs/lib/shallowEqual":32,"fbjs/lib/warning":33,"object-assign":34,"prop-types/checkPropTypes":35,"react":39}],18:[function(require,module,exports){
+},{"_process":12,"fbjs/lib/ExecutionEnvironment":21,"fbjs/lib/camelizeStyleName":23,"fbjs/lib/containsNode":24,"fbjs/lib/emptyFunction":25,"fbjs/lib/emptyObject":26,"fbjs/lib/getActiveElement":27,"fbjs/lib/hyphenateStyleName":29,"fbjs/lib/invariant":30,"fbjs/lib/shallowEqual":33,"fbjs/lib/warning":34,"object-assign":35,"prop-types/checkPropTypes":36,"react":40}],19:[function(require,module,exports){
 /** @license React v16.3.3
  * react-dom.production.min.js
  *
@@ -26636,7 +26804,7 @@ var Gg={createPortal:Fg,findDOMNode:function(a){return null==a?null:1===a.nodeTy
 null})}),!0):!1},unstable_createPortal:function(){return Fg.apply(void 0,arguments)},unstable_batchedUpdates:X.batchedUpdates,unstable_deferredUpdates:X.deferredUpdates,flushSync:X.flushSync,unstable_flushControlled:X.flushControlled,__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED:{EventPluginHub:Ra,EventPluginRegistry:Ca,EventPropagators:kb,ReactControlledComponent:$b,ReactDOMComponentTree:bb,ReactDOMEventListener:$d},unstable_createRoot:function(a,b){return new tg(a,!0,null!=b&&!0===b.hydrate)}};
 X.injectIntoDevTools({findFiberByHostInstance:Ua,bundleType:0,version:"16.3.3",rendererPackageName:"react-dom"});var Hg=Object.freeze({default:Gg}),Ig=Hg&&Gg||Hg;module.exports=Ig["default"]?Ig["default"]:Ig;
 
-},{"fbjs/lib/ExecutionEnvironment":20,"fbjs/lib/containsNode":23,"fbjs/lib/emptyFunction":24,"fbjs/lib/emptyObject":25,"fbjs/lib/getActiveElement":26,"fbjs/lib/invariant":29,"fbjs/lib/shallowEqual":32,"object-assign":34,"react":39}],19:[function(require,module,exports){
+},{"fbjs/lib/ExecutionEnvironment":21,"fbjs/lib/containsNode":24,"fbjs/lib/emptyFunction":25,"fbjs/lib/emptyObject":26,"fbjs/lib/getActiveElement":27,"fbjs/lib/invariant":30,"fbjs/lib/shallowEqual":33,"object-assign":35,"react":40}],20:[function(require,module,exports){
 (function (process){
 'use strict';
 
@@ -26678,7 +26846,7 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 }).call(this,require('_process'))
-},{"./cjs/react-dom.development.js":17,"./cjs/react-dom.production.min.js":18,"_process":11}],20:[function(require,module,exports){
+},{"./cjs/react-dom.development.js":18,"./cjs/react-dom.production.min.js":19,"_process":12}],21:[function(require,module,exports){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
  *
@@ -26712,7 +26880,7 @@ var ExecutionEnvironment = {
 };
 
 module.exports = ExecutionEnvironment;
-},{}],21:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 "use strict";
 
 /**
@@ -26742,7 +26910,7 @@ function camelize(string) {
 }
 
 module.exports = camelize;
-},{}],22:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
  *
@@ -26780,7 +26948,7 @@ function camelizeStyleName(string) {
 }
 
 module.exports = camelizeStyleName;
-},{"./camelize":21}],23:[function(require,module,exports){
+},{"./camelize":22}],24:[function(require,module,exports){
 'use strict';
 
 /**
@@ -26818,7 +26986,7 @@ function containsNode(outerNode, innerNode) {
 }
 
 module.exports = containsNode;
-},{"./isTextNode":31}],24:[function(require,module,exports){
+},{"./isTextNode":32}],25:[function(require,module,exports){
 "use strict";
 
 /**
@@ -26855,7 +27023,7 @@ emptyFunction.thatReturnsArgument = function (arg) {
 };
 
 module.exports = emptyFunction;
-},{}],25:[function(require,module,exports){
+},{}],26:[function(require,module,exports){
 (function (process){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
@@ -26875,7 +27043,7 @@ if (process.env.NODE_ENV !== 'production') {
 
 module.exports = emptyObject;
 }).call(this,require('_process'))
-},{"_process":11}],26:[function(require,module,exports){
+},{"_process":12}],27:[function(require,module,exports){
 'use strict';
 
 /**
@@ -26912,7 +27080,7 @@ function getActiveElement(doc) /*?DOMElement*/{
 }
 
 module.exports = getActiveElement;
-},{}],27:[function(require,module,exports){
+},{}],28:[function(require,module,exports){
 'use strict';
 
 /**
@@ -26943,7 +27111,7 @@ function hyphenate(string) {
 }
 
 module.exports = hyphenate;
-},{}],28:[function(require,module,exports){
+},{}],29:[function(require,module,exports){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
  *
@@ -26980,7 +27148,7 @@ function hyphenateStyleName(string) {
 }
 
 module.exports = hyphenateStyleName;
-},{"./hyphenate":27}],29:[function(require,module,exports){
+},{"./hyphenate":28}],30:[function(require,module,exports){
 (function (process){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
@@ -27036,7 +27204,7 @@ function invariant(condition, format, a, b, c, d, e, f) {
 
 module.exports = invariant;
 }).call(this,require('_process'))
-},{"_process":11}],30:[function(require,module,exports){
+},{"_process":12}],31:[function(require,module,exports){
 'use strict';
 
 /**
@@ -27059,7 +27227,7 @@ function isNode(object) {
 }
 
 module.exports = isNode;
-},{}],31:[function(require,module,exports){
+},{}],32:[function(require,module,exports){
 'use strict';
 
 /**
@@ -27082,7 +27250,7 @@ function isTextNode(object) {
 }
 
 module.exports = isTextNode;
-},{"./isNode":30}],32:[function(require,module,exports){
+},{"./isNode":31}],33:[function(require,module,exports){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
  *
@@ -27148,7 +27316,7 @@ function shallowEqual(objA, objB) {
 }
 
 module.exports = shallowEqual;
-},{}],33:[function(require,module,exports){
+},{}],34:[function(require,module,exports){
 (function (process){
 /**
  * Copyright (c) 2014-present, Facebook, Inc.
@@ -27213,7 +27381,7 @@ if (process.env.NODE_ENV !== 'production') {
 
 module.exports = warning;
 }).call(this,require('_process'))
-},{"./emptyFunction":24,"_process":11}],34:[function(require,module,exports){
+},{"./emptyFunction":25,"_process":12}],35:[function(require,module,exports){
 /*
 object-assign
 (c) Sindre Sorhus
@@ -27305,7 +27473,7 @@ module.exports = shouldUseNative() ? Object.assign : function (target, source) {
 	return to;
 };
 
-},{}],35:[function(require,module,exports){
+},{}],36:[function(require,module,exports){
 (function (process){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
@@ -27400,7 +27568,7 @@ function checkPropTypes(typeSpecs, values, location, componentName, getStack) {
 module.exports = checkPropTypes;
 
 }).call(this,require('_process'))
-},{"./lib/ReactPropTypesSecret":36,"_process":11}],36:[function(require,module,exports){
+},{"./lib/ReactPropTypesSecret":37,"_process":12}],37:[function(require,module,exports){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
  *
@@ -27414,7 +27582,7 @@ var ReactPropTypesSecret = 'SECRET_DO_NOT_PASS_THIS_OR_YOU_WILL_BE_FIRED';
 
 module.exports = ReactPropTypesSecret;
 
-},{}],37:[function(require,module,exports){
+},{}],38:[function(require,module,exports){
 (function (process){
 /** @license React v16.3.2
  * react.development.js
@@ -28832,7 +29000,7 @@ module.exports = react;
 }
 
 }).call(this,require('_process'))
-},{"_process":11,"fbjs/lib/emptyFunction":40,"fbjs/lib/emptyObject":41,"fbjs/lib/invariant":42,"fbjs/lib/warning":43,"object-assign":44,"prop-types/checkPropTypes":45}],38:[function(require,module,exports){
+},{"_process":12,"fbjs/lib/emptyFunction":41,"fbjs/lib/emptyObject":42,"fbjs/lib/invariant":43,"fbjs/lib/warning":44,"object-assign":45,"prop-types/checkPropTypes":46}],39:[function(require,module,exports){
 /** @license React v16.3.2
  * react.production.min.js
  *
@@ -28856,7 +29024,7 @@ _calculateChangedBits:b,_defaultValue:a,_currentValue:a,_changedBits:0,Provider:
 (k=a.type.defaultProps);for(c in b)J.call(b,c)&&!K.hasOwnProperty(c)&&(d[c]=void 0===b[c]&&void 0!==k?k[c]:b[c])}c=arguments.length-2;if(1===c)d.children=e;else if(1<c){k=Array(c);for(var l=0;l<c;l++)k[l]=arguments[l+2];d.children=k}return{$$typeof:t,type:a.type,key:g,ref:h,props:d,_owner:f}},createFactory:function(a){var b=L.bind(null,a);b.type=a;return b},isValidElement:M,version:"16.3.2",__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED:{ReactCurrentOwner:I,assign:m}},X=Object.freeze({default:W}),
 Y=X&&W||X;module.exports=Y["default"]?Y["default"]:Y;
 
-},{"fbjs/lib/emptyFunction":40,"fbjs/lib/emptyObject":41,"fbjs/lib/invariant":42,"object-assign":44}],39:[function(require,module,exports){
+},{"fbjs/lib/emptyFunction":41,"fbjs/lib/emptyObject":42,"fbjs/lib/invariant":43,"object-assign":45}],40:[function(require,module,exports){
 (function (process){
 'use strict';
 
@@ -28867,21 +29035,21 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 }).call(this,require('_process'))
-},{"./cjs/react.development.js":37,"./cjs/react.production.min.js":38,"_process":11}],40:[function(require,module,exports){
-arguments[4][24][0].apply(exports,arguments)
-},{"dup":24}],41:[function(require,module,exports){
+},{"./cjs/react.development.js":38,"./cjs/react.production.min.js":39,"_process":12}],41:[function(require,module,exports){
 arguments[4][25][0].apply(exports,arguments)
-},{"_process":11,"dup":25}],42:[function(require,module,exports){
-arguments[4][29][0].apply(exports,arguments)
-},{"_process":11,"dup":29}],43:[function(require,module,exports){
-arguments[4][33][0].apply(exports,arguments)
-},{"./emptyFunction":40,"_process":11,"dup":33}],44:[function(require,module,exports){
+},{"dup":25}],42:[function(require,module,exports){
+arguments[4][26][0].apply(exports,arguments)
+},{"_process":12,"dup":26}],43:[function(require,module,exports){
+arguments[4][30][0].apply(exports,arguments)
+},{"_process":12,"dup":30}],44:[function(require,module,exports){
 arguments[4][34][0].apply(exports,arguments)
-},{"dup":34}],45:[function(require,module,exports){
+},{"./emptyFunction":41,"_process":12,"dup":34}],45:[function(require,module,exports){
 arguments[4][35][0].apply(exports,arguments)
-},{"./lib/ReactPropTypesSecret":46,"_process":11,"dup":35}],46:[function(require,module,exports){
+},{"dup":35}],46:[function(require,module,exports){
 arguments[4][36][0].apply(exports,arguments)
-},{"dup":36}],47:[function(require,module,exports){
+},{"./lib/ReactPropTypesSecret":47,"_process":12,"dup":36}],47:[function(require,module,exports){
+arguments[4][37][0].apply(exports,arguments)
+},{"dup":37}],48:[function(require,module,exports){
 "use strict";
 
 exports.__esModule = true;
@@ -28949,7 +29117,7 @@ function scrollIntoView(target, options) {
 var _default = scrollIntoView;
 exports.default = _default;
 module.exports = exports.default;
-},{"compute-scroll-into-view":48}],48:[function(require,module,exports){
+},{"compute-scroll-into-view":49}],49:[function(require,module,exports){
 "use strict";
 
 exports.__esModule = true;
@@ -29133,7 +29301,7 @@ var _default = function _default(target, options) {
 
 exports.default = _default;
 module.exports = exports["default"];
-},{}],49:[function(require,module,exports){
+},{}],50:[function(require,module,exports){
 'use strict'
 
 const peacock = require('peacock')
@@ -29354,7 +29522,7 @@ class ThemeBrowser {
 
 module.exports = ThemeBrowser
 
-},{"peacock":14}],50:[function(require,module,exports){
+},{"peacock":15}],51:[function(require,module,exports){
 'use strict'
 
 /* eslint-disable camelcase */
@@ -29631,7 +29799,7 @@ module.exports = {
   , deoptigate
 }
 
-},{"./lib/grouping/group-by-file-and-location":51,"./lib/log-processing/code-entry":54,"./lib/log-processing/deopt-entry":55,"./lib/log-processing/ic-entry":56,"./lib/log-processing/optimization-state":58,"v8-tools-core/logreader":63,"v8-tools-core/profile":64}],51:[function(require,module,exports){
+},{"./lib/grouping/group-by-file-and-location":52,"./lib/log-processing/code-entry":55,"./lib/log-processing/deopt-entry":56,"./lib/log-processing/ic-entry":57,"./lib/log-processing/optimization-state":59,"v8-tools-core/logreader":64,"v8-tools-core/profile":65}],52:[function(require,module,exports){
 'use strict'
 
 const {
@@ -29725,7 +29893,7 @@ function groupByFileAndLocation(groupedByFile) {
 
 module.exports = groupByFileAndLocation
 
-},{"./location":52}],52:[function(require,module,exports){
+},{"./location":53}],53:[function(require,module,exports){
 'use strict'
 
 function keyLocation({ functionName, line, column }) {
@@ -29761,7 +29929,7 @@ module.exports = {
   , byLocationKey
 }
 
-},{}],53:[function(require,module,exports){
+},{}],54:[function(require,module,exports){
 'use strict'
 
 const { highestSeverity, lowestSeverity } = require('../severities')
@@ -29834,7 +30002,7 @@ function summarizeFile(ref) {
 
 module.exports = summarizeFile
 
-},{"../severities":60}],54:[function(require,module,exports){
+},{"../severities":61}],55:[function(require,module,exports){
 'use strict'
 
 const { severityOfOptimizationState }  = require('./optimization-state')
@@ -29875,7 +30043,7 @@ class CodeEntry {
 
 module.exports = CodeEntry
 
-},{"./optimization-state":58}],55:[function(require,module,exports){
+},{"./optimization-state":59}],56:[function(require,module,exports){
 'use strict'
 
 /* eslint-disable camelcase */
@@ -29961,7 +30129,7 @@ class DeoptEntry {
 
 module.exports = DeoptEntry
 
-},{"../severities":60}],56:[function(require,module,exports){
+},{"../severities":61}],57:[function(require,module,exports){
 'use strict'
 
 const {
@@ -30031,7 +30199,7 @@ class IcEntry {
 
 module.exports = IcEntry
 
-},{"./ic-state":57}],57:[function(require,module,exports){
+},{"./ic-state":58}],58:[function(require,module,exports){
 'use strict'
 
 const { MIN_SEVERITY } = require('../severities')
@@ -30089,7 +30257,7 @@ module.exports = {
   , severityIcState
 }
 
-},{"../severities":60}],58:[function(require,module,exports){
+},{"../severities":61}],59:[function(require,module,exports){
 'use strict'
 
 const { Profile } = require('v8-tools-core/profile')
@@ -30129,7 +30297,7 @@ module.exports = {
   , severityOfOptimizationState
 }
 
-},{"v8-tools-core/profile":64}],59:[function(require,module,exports){
+},{"v8-tools-core/profile":65}],60:[function(require,module,exports){
 'use strict'
 
 const { severityColors, MIN_SEVERITY } = require('../severities')
@@ -30297,14 +30465,14 @@ class MarkerResolver {
     )
     return (
       `<a href='#'id="code-location-${info.id}" class="${className}"` +
-        ` data-markerid="${info.id}">${symbol}</a>`
+        ` data-markerid="${info.id}" data-markertype="${kind}">${symbol}</a>`
     )
   }
 }
 
 module.exports = MarkerResolver
 
-},{"../grouping/location":52,"../severities":60,"assert":6}],60:[function(require,module,exports){
+},{"../grouping/location":53,"../severities":61,"assert":7}],61:[function(require,module,exports){
 'use strict'
 
 const severityColors = [
@@ -30316,22 +30484,14 @@ const severityColors = [
 const MIN_SEVERITY = 1
 function highestSeverity(infos) {
   return infos.reduce(
-      (highest, ref) => {
-        var severity = ref.severity;
-
-        return severity > highest ? severity : highest;
-  }
+      (highest, { severity }) => severity > highest ? severity : highest
     , MIN_SEVERITY
   )
 }
 
 function lowestSeverity(infos) {
   return infos.reduce(
-      (lowest, ref) => {
-        var severity = ref.severity;
-
-        return severity < lowest ? severity : lowest;
-  }
+      (lowest, { severity }) => severity < lowest ? severity : lowest
     , 99
   )
 }
@@ -30343,7 +30503,7 @@ module.exports = {
   , lowestSeverity
 }
 
-},{}],61:[function(require,module,exports){
+},{}],62:[function(require,module,exports){
 // Copyright 2009 the V8 project authors. All rights reserved.
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
@@ -30670,7 +30830,7 @@ if (typeof module === 'object' && typeof module.exports === 'object') {
   module.exports = CodeMap;
 } 
 
-},{"./splaytree.js":65}],62:[function(require,module,exports){
+},{"./splaytree.js":66}],63:[function(require,module,exports){
 // Copyright 2009 the V8 project authors. All rights reserved.
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
@@ -30778,7 +30938,7 @@ if (typeof module === 'object' && typeof module.exports === 'object') {
   module.exports = CsvParser;
 } 
 
-},{}],63:[function(require,module,exports){
+},{}],64:[function(require,module,exports){
 // Copyright 2011 the V8 project authors. All rights reserved.
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
@@ -31020,7 +31180,7 @@ if (typeof module === 'object' && typeof module.exports === 'object') {
   module.exports = LogReader;
 } 
 
-},{"./csvparser.js":62}],64:[function(require,module,exports){
+},{"./csvparser.js":63}],65:[function(require,module,exports){
 // Copyright 2009 the V8 project authors. All rights reserved.
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
@@ -32154,7 +32314,7 @@ JsonProfile.prototype.writeJson = function() {
   write('}\n');
 };
 
-},{"./codemap.js":61}],65:[function(require,module,exports){
+},{"./codemap.js":62}],66:[function(require,module,exports){
 // Copyright 2009 the V8 project authors. All rights reserved.
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
@@ -32487,5 +32647,5 @@ if (typeof module === 'object' && typeof module.exports === 'object') {
   module.exports = SplayTree;
 } 
 
-},{}]},{},[5])(5)
+},{}]},{},[6])(6)
 });

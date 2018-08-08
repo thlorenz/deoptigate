@@ -11,6 +11,10 @@
   text-decoration: none;
 }
 
+.tab-header:focus {
+  outline: none;
+}
+
 /* Scrollbar on left for Code View */
 .code-view {
   direction: rtl;

@@ -18,14 +18,19 @@ const severityClassNames = [
   , 'red b'
 ]
 
+const OPT_TAB_IDX = 0
+const DEOPT_TAB_IDX = 1
+const ICS_TAB_IDX = 2
+
 class SummaryView extends Component {
   constructor(props) {
     super(props)
-    const { ics, icLocations, deopts, deoptLocations, onsummaryClicked } = props
+    const { ics, icLocations, deopts, deoptLocations, onsummaryClicked, ontabHeaderClicked } = props
 
     assert(ics == null || icLocations != null, 'need to provide locations for ics')
     assert(deopts == null || deoptLocations != null, 'need to provide locations for deopts')
     assert.equal(typeof onsummaryClicked, 'function', 'need to pass onsummaryClicked function')
+    assert.equal(typeof ontabHeaderClicked, 'function', 'need to pass ontabHeaderClicked function')
 
     this._bind()
   }
@@ -53,21 +58,45 @@ class SummaryView extends Component {
       , deoptLocations
       , codes
       , codeLocations
+      , selectedTabIdx
     } = this.props
-    const renderedDeopts = this._renderDeopts(deopts, deoptLocations)
-    const renderedIcs = this._renderIcs(ics, icLocations)
-    const renderedCodes = this._renderCodes(codes, codeLocations)
+    const renderedDeopts = this._renderDeopts(deopts, deoptLocations, selectedTabIdx === DEOPT_TAB_IDX)
+    const renderedIcs = this._renderIcs(ics, icLocations, selectedTabIdx === ICS_TAB_IDX)
+    const renderedCodes = this._renderCodes(codes, codeLocations, selectedTabIdx === OPT_TAB_IDX)
     return (
       <div className={className}>
-        {renderedCodes}
-        {renderedDeopts}
-        {renderedIcs}
+        <div className='flex flex-row'>
+          {this._renderTabHeader('Optimizations', OPT_TAB_IDX)}
+          {this._renderTabHeader('Deoptimizations', DEOPT_TAB_IDX)}
+          {this._renderTabHeader('Incline Caches', ICS_TAB_IDX)}
+        </div>
+        <div>
+          {renderedCodes}
+          {renderedDeopts}
+          {renderedIcs}
+        </div>
       </div>
     )
   }
 
+  /*
+   * Tabs
+   */
+
+  _renderTabHeader(label, idx) {
+    const { selectedTabIdx } = this.props
+    const selected = idx === selectedTabIdx
+    const baseClass = 'flex flex-column ttu dib link pa3 bt outline-0 tab-header'
+    const selectedClass = 'b--blue blue'
+    const unselectedClass = 'black b--white'
+    const className = selected ? `${baseClass} ${selectedClass}` : `${baseClass} ${unselectedClass}`
+
+    return <a className={className} href='#' onClick={() => this._ontabHeaderClicked(idx)}>{label}</a>
+  }
+
   _renderDataPoint(data, locations, renderDetails) {
     const { selectedLocation, includeAllSeverities, relativePath } = this.props
+    if (locations.length === 0) return <h4 className='ml4'>None</h4>
     const rendered = []
     for (const loc of locations) {
       const info = data.get(loc)
@@ -85,34 +114,34 @@ class SummaryView extends Component {
     return rendered
   }
 
-  _renderIcs(ics, icLocations) {
+  _renderIcs(ics, icLocations, selected) {
     if (ics == null) return null
+    const className = selected ? '' : 'dn'
     const rendered = this._renderDataPoint(ics, icLocations, this._renderIc)
     return (
-      <div key='ics'>
-        <h4 className='underline'>Inline Caches</h4>
+      <div key='ics' className={className}>
         {rendered}
       </div>
     )
   }
 
-  _renderDeopts(deopts, deoptLocations) {
+  _renderDeopts(deopts, deoptLocations, selected) {
     if (deopts == null) return null
+    const className = selected ? '' : 'dn'
     const rendered = this._renderDataPoint(deopts, deoptLocations, this._renderDeopt)
     return (
-      <div key='deopts'>
-        <h4 className='underline'>Deoptimizations</h4>
+      <div key='deopts' className={className}>
         {rendered}
       </div>
     )
   }
 
-  _renderCodes(codes, codeLocations, relativePath) {
+  _renderCodes(codes, codeLocations, selected) {
     if (codes == null) return null
+    const className = selected ? '' : 'dn'
     const rendered = this._renderDataPoint(codes, codeLocations, this._renderCode)
     return (
-      <div key='optimizations'>
-        <h4 className='underline'>Optimizations</h4>
+      <div key='optimizations' className={className}>
         {rendered}
       </div>
     )
@@ -263,10 +292,22 @@ class SummaryView extends Component {
     )
   }
 
+  /*
+   * Events
+   */
+  _ontabHeaderClicked(idx) {
+    const { ontabHeaderClicked } = this.props
+    ontabHeaderClicked(idx)
+  }
+
   _onsummaryClicked(id) {
     const { onsummaryClicked } = this.props
     onsummaryClicked(id)
   }
+
+  static get OPT_TAB_IDX() { return OPT_TAB_IDX }
+  static get DEOPT_TAB_IDX() { return DEOPT_TAB_IDX }
+  static get ICS_TAB_IDX() { return ICS_TAB_IDX }
 }
 module.exports = {
   SummaryView
