@@ -10,9 +10,19 @@ const { highlight } = require('peacock')
 const Theme = require('../theme.browser')
 const MarkerResolver = require('../../lib/rendering/marker-resolver')
 
-function tryHighlightCode(code, theme) {
+function tryHighlightCode(fileName, code, theme) {
+  // TODO: if file is very large or fails to highlight add markers without highlighting
   try {
-    return highlight(code, { theme, linenos: true })
+    try {
+      // Highlighting without jsx support allows peacock to only parse out tokens
+      // which is faster than building the AST
+      const jsx = fileName.endsWith('jsx')
+      return highlight(code, { theme, linenos: true, jsx })
+    } catch (err) {
+      // File maybe jsx file even though it doesn't have that extension
+      // so let's try again
+      return highlight(code, { theme, linenos: true, jsx: true })
+    }
   } catch (err) {
     return `
       <p>Deoptigate was unable to highlight the below code</p>
@@ -67,6 +77,7 @@ class CodeView extends Component {
     const {
         className = ''
       , code
+      , fileName
       , ics
       , deopts
       , codes
@@ -89,7 +100,7 @@ class CodeView extends Component {
     })
 
     const theme = new Theme(markerResolver).theme
-    const highlightedCode = tryHighlightCode(code, theme)
+    const highlightedCode = tryHighlightCode(fileName, code, theme)
     return (
       <div className={className}>
         <div dangerouslySetInnerHTML={{__html: highlightedCode}} />
