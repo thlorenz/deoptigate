@@ -8,29 +8,33 @@ const assert = require('assert')
 class ToolbarView extends Component {
   constructor(props) {
     super(props)
-    const { onincludeAllSeveritiesChanged } = props
+    const { onincludeAllSeveritiesChanged, onhighlightCodeChanged } = props
     assert.equal(typeof onincludeAllSeveritiesChanged, 'function', 'need to pass onincludeAllSeveritiesChanged function')
+    assert.equal(typeof onhighlightCodeChanged, 'function', 'need to pass onhighlightCodeChanged function')
     this._bind()
   }
 
   _bind() {
     this._onincludeAllSeveritiesToggled = this._onincludeAllSeveritiesToggled.bind(this)
+    this._onhighlightCodeToggled = this._onhighlightCodeToggled.bind(this)
   }
 
   render() {
     const { className = '' } = this.props
-    const options = this._renderOptions()
     return (
       <div className={className}>
-        {options}
+        <span>
+          {this._renderHighlightCodeOption()}
+          {this._renderSeverityOption()}
+        </span>
       </div>
     )
   }
 
-  _renderOptions() {
+  _renderSeverityOption() {
     const { includeAllSeverities } = this.props
     return (
-      <span>
+      <span className='pr2 pl2'>
         Low Severities
         <input
           className='pointer'
@@ -41,9 +45,28 @@ class ToolbarView extends Component {
     )
   }
 
+  _renderHighlightCodeOption() {
+    const { highlightCode } = this.props
+    return (
+      <span className='pr2 pl2'>
+        Highlight Code
+        <input
+          className='pointer'
+          type='checkbox'
+          defaultChecked={!!highlightCode}
+          onChange={this._onhighlightCodeToggled} />
+      </span>
+    )
+  }
+
   _onincludeAllSeveritiesToggled(e) {
     const { onincludeAllSeveritiesChanged, includeAllSeverities } = this.props
     onincludeAllSeveritiesChanged(!includeAllSeverities)
+  }
+
+  _onhighlightCodeToggled(e) {
+    const { onhighlightCodeChanged, highlightCode } = this.props
+    onhighlightCodeChanged(!highlightCode)
   }
 }
 

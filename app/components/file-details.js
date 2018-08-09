@@ -24,6 +24,7 @@ class FileDetailsView extends Component {
       , selectedFile
       , selectedLocation
       , includeAllSeverities
+      , highlightCode
       , className = ''
       , onsummaryClicked
     } = this.props
@@ -46,6 +47,7 @@ class FileDetailsView extends Component {
         <CodeView
           className='flex-column vh-85 w-50 overflow-scroll code-view'
           selectedLocation={selectedLocation}
+          fileName={selectedFile}
           code={src}
           ics={ics}
           icLocations={icLocations}
@@ -54,6 +56,7 @@ class FileDetailsView extends Component {
           codes={codes}
           codeLocations={codeLocations}
           includeAllSeverities={includeAllSeverities}
+          highlightCode={highlightCode}
           onmarkerClicked={this._onmarkerClicked} />
         <SummaryView
           className='flex-column vh-85 w-50 overflow-scroll'

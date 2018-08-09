@@ -27,6 +27,7 @@ class MainView extends Component {
         selectedFile: null
       , selectedLocation: 2
       , includeAllSeverities: false
+      , highlightCode: true
       , selectedTabIdx: FILES_TAB_IDX
     }
     this._bind()
@@ -35,11 +36,12 @@ class MainView extends Component {
   _bind() {
     this._onlocationSelected = this._onlocationSelected.bind(this)
     this._onincludeAllSeveritiesChanged = this._onincludeAllSeveritiesChanged.bind(this)
+    this._onhighlightCodeChanged = this._onhighlightCodeChanged.bind(this)
     this._onfileClicked = this._onfileClicked.bind(this)
   }
 
   render() {
-    const { includeAllSeverities } = this.state
+    const { includeAllSeverities, highlightCode } = this.state
 
     const tabs = this._renderTabs()
     return (
@@ -50,7 +52,9 @@ class MainView extends Component {
           <ToolbarView
             className='flex flex-column self-center ml4 pl4 bl bw1 b--silver'
             includeAllSeverities={includeAllSeverities}
-            onincludeAllSeveritiesChanged={this._onincludeAllSeveritiesChanged} />
+            highlightCode={highlightCode}
+            onincludeAllSeveritiesChanged={this._onincludeAllSeveritiesChanged}
+            onhighlightCodeChanged={this._onhighlightCodeChanged} />
         </div>
         {tabs}
       </div>
@@ -105,7 +109,7 @@ class MainView extends Component {
 
   _renderFileDetails(selected) {
     const { groups } = this.props
-    const { selectedFile, selectedLocation, includeAllSeverities } = this.state
+    const { selectedFile, selectedLocation, includeAllSeverities, highlightCode } = this.state
     const display = selected ? 'flex' : 'dn'
     const className = `${display} flex-row justify-center ma2`
     if (selectedFile == null || !groups.has(selectedFile)) {
@@ -120,6 +124,7 @@ class MainView extends Component {
         selectedFile={selectedFile}
         selectedLocation={selectedLocation}
         includeAllSeverities={includeAllSeverities}
+        highlightCode={highlightCode}
         className={className}
         onmarkerClicked={this._onlocationSelected}
         onsummaryClicked={this._onlocationSelected}
@@ -140,6 +145,10 @@ class MainView extends Component {
 
   _onincludeAllSeveritiesChanged(includeAllSeverities) {
     this.setState(Object.assign(this.state, { includeAllSeverities, selectedLocation: null }))
+  }
+
+  _onhighlightCodeChanged(highlightCode) {
+    this.setState(Object.assign(this.state, { highlightCode }))
   }
 
   _onfileClicked(file) {
