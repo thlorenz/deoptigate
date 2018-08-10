@@ -45,7 +45,7 @@ class MainView extends Component {
 
     const tabs = this._renderTabs()
     return (
-      <div className='center mw9 pa2'>
+      <div className='center pa2'>
         <div className='flex flex-row'>
           {this._renderTabHeader('Files', FILES_TAB_IDX)}
           {this._renderTabHeader('Details', DETAILS_TAB_IDX)}
@@ -95,7 +95,7 @@ class MainView extends Component {
     const { groups } = this.props
     const { selectedFile, includeAllSeverities } = this.state
     const display = selected ? 'flex' : 'dn'
-    const className = `${display} flex-row justify-center vh-90 overflow-scroll`
+    const className = `${display} flex-row overflow-scroll pa2`
 
     return (
       <FilesView
@@ -111,7 +111,7 @@ class MainView extends Component {
     const { groups } = this.props
     const { selectedFile, selectedLocation, includeAllSeverities, highlightCode } = this.state
     const display = selected ? 'flex' : 'dn'
-    const className = `${display} flex-row justify-center ma2`
+    const className = `${display} flex-row w-100 ma2`
     if (selectedFile == null || !groups.has(selectedFile)) {
       return (
         <div className={className}>Please select a file in the Files table</div>

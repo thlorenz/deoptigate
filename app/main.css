@@ -6,6 +6,9 @@
 .highlight pre {
   font-size: 13px;
   font-family: 'Source Code Pro', monospace;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overflow: scroll;
 }
 
 .code-view a,

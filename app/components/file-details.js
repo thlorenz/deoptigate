@@ -45,7 +45,7 @@ class FileDetailsView extends Component {
     return (
       <div className={className}>
         <CodeView
-          className='flex-column vh-85 w-50 overflow-scroll code-view'
+          className='flex-column vh-85 w-50 code-view'
           selectedLocation={selectedLocation}
           fileName={selectedFile}
           code={src}
@@ -59,7 +59,7 @@ class FileDetailsView extends Component {
           highlightCode={highlightCode}
           onmarkerClicked={this._onmarkerClicked} />
         <SummaryView
-          className='flex-column vh-85 w-50 overflow-scroll'
+          className='flex-column vh-85 w-50'
           file={selectedFile}
           relativePath={relativePath}
           selectedLocation={selectedLocation}
