@@ -11,16 +11,9 @@ const { highlight } = require('peacock')
 const Theme = require('../theme.browser')
 const MarkerResolver = require('../../lib/rendering/marker-resolver')
 
-function tryHighlightCode(code, theme) {
-  try {
-    return highlight(code, { theme, linenos: true })
-  } catch (err) {
-    return `
-      <p>Deoptigate was unable to highlight the below code</p>
-      <pre style='whitespace: pre'>${code}</pre>
-    `
-  }
-}
+const markOnly = require('../../lib/rendering/mark-only')
+
+const MAX_HIGHLIGHT_LEN = 1E5
 
 class CodeView extends Component {
   constructor(props) {
@@ -61,13 +54,13 @@ class CodeView extends Component {
          props.code !== nextProps.code
       || props.selectedLocation !== nextProps.selectedLocation
       || props.includeAllSeverities !== nextProps.includeAllSeverities
+      || props.highlightCode !== nextProps.highlightCode
     )
   }
 
   render() {
     const {
         className = ''
-      , code
       , ics
       , deopts
       , codes
@@ -90,12 +83,40 @@ class CodeView extends Component {
     })
 
     const theme = new Theme(markerResolver).theme
-    const highlightedCode = tryHighlightCode(code, theme)
+    const highlightedCode = this._tryHighlightCode(theme, markerResolver)
     return (
       React.createElement( 'div', { className: className },
         React.createElement( 'div', { dangerouslySetInnerHTML: {__html: highlightedCode} })
       )
     )
+  }
+
+  _tryHighlightCode(theme, markerResolver) {
+    const { fileName, code, highlightCode } = this.props
+    const nohighlight = !highlightCode || code.length > MAX_HIGHLIGHT_LEN
+    if (nohighlight) { return markOnly(code, markerResolver) }
+    try {
+      try {
+        // Highlighting without jsx support allows peacock to only parse out tokens
+        // which is faster than building the AST
+        const jsx = fileName.endsWith('jsx')
+        return highlight(code, { theme, linenos: true, jsx })
+      } catch (err) {
+        // Higlighting without jsx option failed, try again
+        return highlight(code, { theme, linenos: true, jsx: true })
+      }
+    } catch (err) {
+      // Highlighting failed alltogether
+      try {
+        return markOnly(code, markerResolver)
+      } catch (innerErr) {
+        // Even marking only failed, just show the code :(
+        return `
+          <p>Deoptigate was unable to highlight/mark the below code</p>
+          <pre style='white-space: pre'>${code}</pre>
+        `
+      }
+    }
   }
 
   _onmarkerClicked(id, type) {
@@ -108,7 +129,7 @@ module.exports = {
   CodeView
 }
 
-},{"../../lib/rendering/marker-resolver":60,"../theme.browser":50,"assert":7,"peacock":15,"react":40,"react-dom":20,"scroll-into-view-if-needed":48}],2:[function(require,module,exports){
+},{"../../lib/rendering/mark-only":60,"../../lib/rendering/marker-resolver":61,"../theme.browser":50,"assert":7,"peacock":15,"react":40,"react-dom":20,"scroll-into-view-if-needed":48}],2:[function(require,module,exports){
 'use strict'
 
 const React = require('react')
@@ -135,6 +156,7 @@ class FileDetailsView extends Component {
       , selectedFile
       , selectedLocation
       , includeAllSeverities
+      , highlightCode
       , className = ''
       , onsummaryClicked
     } = this.props
@@ -155,9 +177,9 @@ class FileDetailsView extends Component {
     return (
       React.createElement( 'div', { className: className },
         React.createElement( CodeView, {
-          className: 'flex-column vh-85 w-50 overflow-scroll code-view', selectedLocation: selectedLocation, code: src, ics: ics, icLocations: icLocations, deopts: deopts, deoptLocations: deoptLocations, codes: codes, codeLocations: codeLocations, includeAllSeverities: includeAllSeverities, onmarkerClicked: this._onmarkerClicked }),
+          className: 'flex-column vh-85 w-50 code-view', selectedLocation: selectedLocation, fileName: selectedFile, code: src, ics: ics, icLocations: icLocations, deopts: deopts, deoptLocations: deoptLocations, codes: codes, codeLocations: codeLocations, includeAllSeverities: includeAllSeverities, highlightCode: highlightCode, onmarkerClicked: this._onmarkerClicked }),
         React.createElement( SummaryView, {
-          className: 'flex-column vh-85 w-50 overflow-scroll', file: selectedFile, relativePath: relativePath, selectedLocation: selectedLocation, ics: ics, icLocations: icLocations, deopts: deopts, deoptLocations: deoptLocations, codes: codes, codeLocations: codeLocations, includeAllSeverities: includeAllSeverities, selectedTabIdx: selectedSummaryTabIdx, ontabHeaderClicked: this._onsummaryTabHeaderClicked, onsummaryClicked: onsummaryClicked })
+          className: 'flex-column vh-85 w-50 summary-view', file: selectedFile, relativePath: relativePath, selectedLocation: selectedLocation, ics: ics, icLocations: icLocations, deopts: deopts, deoptLocations: deoptLocations, codes: codes, codeLocations: codeLocations, includeAllSeverities: includeAllSeverities, selectedTabIdx: selectedSummaryTabIdx, ontabHeaderClicked: this._onsummaryTabHeaderClicked, onsummaryClicked: onsummaryClicked })
       )
     )
   }
@@ -639,7 +661,7 @@ module.exports = {
   SummaryView
 }
 
-},{"../../lib/log-processing/ic-state":58,"../../lib/log-processing/optimization-state":59,"../../lib/severities":61,"assert":7,"react":40,"scroll-into-view-if-needed":48}],5:[function(require,module,exports){
+},{"../../lib/log-processing/ic-state":58,"../../lib/log-processing/optimization-state":59,"../../lib/severities":62,"assert":7,"react":40,"scroll-into-view-if-needed":48}],5:[function(require,module,exports){
 'use strict'
 
 const React = require('react')
@@ -650,30 +672,43 @@ const assert = require('assert')
 class ToolbarView extends Component {
   constructor(props) {
     super(props)
-    const { onincludeAllSeveritiesChanged } = props
+    const { onincludeAllSeveritiesChanged, onhighlightCodeChanged } = props
     assert.equal(typeof onincludeAllSeveritiesChanged, 'function', 'need to pass onincludeAllSeveritiesChanged function')
+    assert.equal(typeof onhighlightCodeChanged, 'function', 'need to pass onhighlightCodeChanged function')
     this._bind()
   }
 
   _bind() {
     this._onincludeAllSeveritiesToggled = this._onincludeAllSeveritiesToggled.bind(this)
+    this._onhighlightCodeToggled = this._onhighlightCodeToggled.bind(this)
   }
 
   render() {
     const { className = '' } = this.props
-    const options = this._renderOptions()
     return (
       React.createElement( 'div', { className: className },
-        options
+        React.createElement( 'span', null,
+          this._renderHighlightCodeOption(),
+          this._renderSeverityOption()
+        )
       )
     )
   }
 
-  _renderOptions() {
+  _renderSeverityOption() {
     const { includeAllSeverities } = this.props
     return (
-      React.createElement( 'span', null, "Low Severities ", React.createElement( 'input', {
+      React.createElement( 'span', { className: 'pr2 pl2' }, "Low Severities ", React.createElement( 'input', {
           className: 'pointer', type: 'checkbox', defaultChecked: !!includeAllSeverities, onChange: this._onincludeAllSeveritiesToggled })
+      )
+    )
+  }
+
+  _renderHighlightCodeOption() {
+    const { highlightCode } = this.props
+    return (
+      React.createElement( 'span', { className: 'pr2 pl2' }, "Highlight Code ", React.createElement( 'input', {
+          className: 'pointer', type: 'checkbox', defaultChecked: !!highlightCode, onChange: this._onhighlightCodeToggled })
       )
     )
   }
@@ -681,6 +716,11 @@ class ToolbarView extends Component {
   _onincludeAllSeveritiesToggled(e) {
     const { onincludeAllSeveritiesChanged, includeAllSeverities } = this.props
     onincludeAllSeveritiesChanged(!includeAllSeverities)
+  }
+
+  _onhighlightCodeToggled(e) {
+    const { onhighlightCodeChanged, highlightCode } = this.props
+    onhighlightCodeChanged(!highlightCode)
   }
 }
 
@@ -718,6 +758,7 @@ class MainView extends Component {
         selectedFile: null
       , selectedLocation: 2
       , includeAllSeverities: false
+      , highlightCode: true
       , selectedTabIdx: FILES_TAB_IDX
     }
     this._bind()
@@ -726,20 +767,21 @@ class MainView extends Component {
   _bind() {
     this._onlocationSelected = this._onlocationSelected.bind(this)
     this._onincludeAllSeveritiesChanged = this._onincludeAllSeveritiesChanged.bind(this)
+    this._onhighlightCodeChanged = this._onhighlightCodeChanged.bind(this)
     this._onfileClicked = this._onfileClicked.bind(this)
   }
 
   render() {
-    const { includeAllSeverities } = this.state
+    const { includeAllSeverities, highlightCode } = this.state
 
     const tabs = this._renderTabs()
     return (
-      React.createElement( 'div', { className: 'center mw9 pa2' },
+      React.createElement( 'div', { className: 'center pa2' },
         React.createElement( 'div', { className: 'flex flex-row' },
           this._renderTabHeader('Files', FILES_TAB_IDX),
           this._renderTabHeader('Details', DETAILS_TAB_IDX),
           React.createElement( ToolbarView, {
-            className: 'flex flex-column self-center ml4 pl4 bl bw1 b--silver', includeAllSeverities: includeAllSeverities, onincludeAllSeveritiesChanged: this._onincludeAllSeveritiesChanged })
+            className: 'flex flex-column self-center ml4 pl4 bl bw1 b--silver', includeAllSeverities: includeAllSeverities, highlightCode: highlightCode, onincludeAllSeveritiesChanged: this._onincludeAllSeveritiesChanged, onhighlightCodeChanged: this._onhighlightCodeChanged })
         ),
         tabs
       )
@@ -780,7 +822,7 @@ class MainView extends Component {
     const { groups } = this.props
     const { selectedFile, includeAllSeverities } = this.state
     const display = selected ? 'flex' : 'dn'
-    const className = `${display} flex-row justify-center vh-90 overflow-scroll`
+    const className = `${display} flex-row overflow-scroll pa2`
 
     return (
       React.createElement( FilesView, {
@@ -790,9 +832,9 @@ class MainView extends Component {
 
   _renderFileDetails(selected) {
     const { groups } = this.props
-    const { selectedFile, selectedLocation, includeAllSeverities } = this.state
+    const { selectedFile, selectedLocation, includeAllSeverities, highlightCode } = this.state
     const display = selected ? 'flex' : 'dn'
-    const className = `${display} flex-row justify-center ma2`
+    const className = `${display} flex-row w-100 ma2`
     if (selectedFile == null || !groups.has(selectedFile)) {
       return (
         React.createElement( 'div', { className: className }, "Please select a file in the Files table")
@@ -801,7 +843,7 @@ class MainView extends Component {
 
     return (
       React.createElement( FileDetailsView, {
-        groups: groups, selectedFile: selectedFile, selectedLocation: selectedLocation, includeAllSeverities: includeAllSeverities, className: className, onmarkerClicked: this._onlocationSelected, onsummaryClicked: this._onlocationSelected })
+        groups: groups, selectedFile: selectedFile, selectedLocation: selectedLocation, includeAllSeverities: includeAllSeverities, highlightCode: highlightCode, className: className, onmarkerClicked: this._onlocationSelected, onsummaryClicked: this._onlocationSelected })
     )
   }
 
@@ -818,6 +860,10 @@ class MainView extends Component {
 
   _onincludeAllSeveritiesChanged(includeAllSeverities) {
     this.setState(Object.assign(this.state, { includeAllSeverities, selectedLocation: null }))
+  }
+
+  _onhighlightCodeChanged(highlightCode) {
+    this.setState(Object.assign(this.state, { highlightCode }))
   }
 
   _onfileClicked(file) {
@@ -29799,7 +29845,7 @@ module.exports = {
   , deoptigate
 }
 
-},{"./lib/grouping/group-by-file-and-location":52,"./lib/log-processing/code-entry":55,"./lib/log-processing/deopt-entry":56,"./lib/log-processing/ic-entry":57,"./lib/log-processing/optimization-state":59,"v8-tools-core/logreader":64,"v8-tools-core/profile":65}],52:[function(require,module,exports){
+},{"./lib/grouping/group-by-file-and-location":52,"./lib/log-processing/code-entry":55,"./lib/log-processing/deopt-entry":56,"./lib/log-processing/ic-entry":57,"./lib/log-processing/optimization-state":59,"v8-tools-core/logreader":65,"v8-tools-core/profile":66}],52:[function(require,module,exports){
 'use strict'
 
 const {
@@ -30002,7 +30048,7 @@ function summarizeFile(ref) {
 
 module.exports = summarizeFile
 
-},{"../severities":61}],55:[function(require,module,exports){
+},{"../severities":62}],55:[function(require,module,exports){
 'use strict'
 
 const { severityOfOptimizationState }  = require('./optimization-state')
@@ -30129,7 +30175,7 @@ class DeoptEntry {
 
 module.exports = DeoptEntry
 
-},{"../severities":61}],57:[function(require,module,exports){
+},{"../severities":62}],57:[function(require,module,exports){
 'use strict'
 
 const {
@@ -30257,7 +30303,7 @@ module.exports = {
   , severityIcState
 }
 
-},{"../severities":61}],59:[function(require,module,exports){
+},{"../severities":62}],59:[function(require,module,exports){
 'use strict'
 
 const { Profile } = require('v8-tools-core/profile')
@@ -30297,7 +30343,92 @@ module.exports = {
   , severityOfOptimizationState
 }
 
-},{"v8-tools-core/profile":65}],60:[function(require,module,exports){
+},{"v8-tools-core/profile":66}],60:[function(require,module,exports){
+'use strict'
+
+function getDigits(n) {
+  if (n < 10) { return 1 }
+  if (n < 1E2) { return 2 }
+  if (n < 1E3) { return 3 }
+  if (n < 1E4) { return 4 }
+  if (n < 1E5) { return 5 }
+  if (n < 1E6) { return 6 }
+  if (n < 1E7) { return 2 }
+  if (n < 1E8) { return 8 }
+  if (n < 1E9) { return 9 }
+  return 10
+}
+
+function pad(n, totalDigits) {
+  const padDigits = totalDigits - getDigits(n)
+  switch (padDigits) {
+    case 0: return '' + n
+    case 1: return ' ' + n
+    case 2: return '  ' + n
+    case 3: return '   ' + n
+    case 4: return '    ' + n
+    case 5: return '     ' + n
+    case 6: return '      ' + n
+    case 7: return '       ' + n
+    case 8: return '        ' + n
+    case 9: return '         ' + n
+    case 10: return '         ' + n
+  }
+}
+
+function processLine(line, markerResolver, next, lineno, totalDigits) {
+  let s = ''
+  let column = 0
+  const cols = line.length - 1
+  const writtenCols = new Set()
+  function insert() {
+    const { insertBefore, insertAfter } = markerResolver.resolve(next)
+    // Write char in column only once even if multiple markers exist for it
+    s += (writtenCols.has(column)
+      ? insertBefore + insertAfter
+      : insertBefore + line[column] + insertAfter
+    )
+    writtenCols.add(column)
+    next = markerResolver.nextLocation()
+  }
+  do {
+    if (next == null) { break }
+    // Work our way to the column of the next marker
+    while (column < (next.column - 1) && column < cols) {
+      s += line[column++]
+      if (column >= cols) { break }
+    }
+    insert()
+  } while (next != null && next.line === lineno && column < cols)
+
+  // Add remaining columns (after the last marker for this line)
+  if (column < cols) { s += line.slice(column + 1) }
+
+  return { renderedLine: `<span>${pad(lineno + 1, totalDigits)}: </span><span>${s}</span><br>`, nextLocation: next }
+}
+
+function markOnly(code, markerResolver) {
+  const lines = code.split('\n')
+  const len = lines.length
+  const totalDigits = getDigits(len)
+  var result = ''
+  let next = markerResolver.nextLocation()
+  for (let lineno = 0; lineno < len; lineno++) {
+    const line = lines[lineno]
+    if (next == null || next.line > (lineno + 1)) {
+      result += `<span>${pad(lineno + 1, totalDigits)}: </span><span>${line}</span><br>`
+      continue
+    }
+    const { renderedLine, nextLocation } = processLine(line, markerResolver, next, lineno, totalDigits)
+    result += renderedLine
+    next = nextLocation
+  }
+  return `<div class="pre"'>${result}</div>`
+}
+
+module.exports = markOnly
+
+},{}],61:[function(require,module,exports){
 'use strict'
 
 const { severityColors, MIN_SEVERITY } = require('../severities')
@@ -30313,6 +30444,19 @@ function applyMark(codeLocation, markerLocation) {
   if (codeLocation.line < markerLocation.line) { return false }
   if (codeLocation.column < markerLocation.column) { return false }
   return true
+}
+
+function highSeverity(map) {
+  const res = new Map()
+  for (const [ key, info ] of map) {
+    if (info.severity === MIN_SEVERITY) { continue }
+    res.set(key, info)
+  }
+  return res
+}
+
+function includedIn(map, arr) {
+  return arr.filter(x => map.has(x))
 }
 
 class MarkerResolver {
@@ -30331,19 +30475,19 @@ class MarkerResolver {
     assert(codes == null || codeLocations != null, 'need to provide locations for codes')
 
     this._ics = ics
-    this._icLocations = icLocations
+    this._ics = includeAllSeverities ? ics : highSeverity(ics)
+    this._icLocations = includeAllSeverities ? icLocations : includedIn(this._ics, icLocations)
     this._icLocationIdx = 0
 
-    this._deopts = deopts
-    this._deoptLocations = deoptLocations
+    this._deopts = includeAllSeverities ? deopts : highSeverity(deopts)
+    this._deoptLocations = includeAllSeverities ? deoptLocations : includedIn(this._deopts, deoptLocations)
     this._deoptLocationIdx = 0
 
-    this._codes = codes
-    this._codeLocations = codeLocations
+    this._codes = includeAllSeverities ? codes : highSeverity(codes)
+    this._codeLocations = includeAllSeverities ? codeLocations : includedIn(this._codes, codeLocations)
     this._codeLocationIdx = 0
 
     this._selectedLocation = selectedLocation
-    this._includeAllSeverities = includeAllSeverities
   }
 
   resolve(codeLocation) {
@@ -30365,6 +30509,19 @@ class MarkerResolver {
       insertAfter += after
     }
     return { insertBefore, insertAfter }
+  }
+
+  nextLocation() {
+    const nextIc = unkeyLocation(this._icLocations[this._icLocationIdx])
+    const nextDeopt = unkeyLocation(this._deoptLocations[this._deoptLocationIdx])
+    const nextOpt = unkeyLocation(this._codeLocations[this._codeLocationIdx])
+    return [ nextDeopt, nextOpt ].reduce((next, loc) => {
+      if (next == null) { return loc }
+      if (loc == null) { return next }
+      if (next.line > loc.line) { return loc }
+      if (next.line < loc.line) { return next }
+      return next.column < loc.column ? next : loc
+    }, nextIc)
   }
 
   _resolveDeopt(codeLocation) {
@@ -30438,12 +30595,10 @@ class MarkerResolver {
     if (map != null && map.has(key)) {
       return this._handle(map.get(key), kind)
     }
-    return ''
+    return { result: '', placeBefore: false }
   }
 
   _handle(info, kind) {
-    const severity = info.severity
-    if (severity === MIN_SEVERITY && !this._includeAllSeverities) { return { result: '' } }
     const result = this._determineBrowserMarkerSymbol(info, kind)
 
     // anonymous Node.js function wrapper
@@ -30472,7 +30627,7 @@ class MarkerResolver {
 
 module.exports = MarkerResolver
 
-},{"../grouping/location":53,"../severities":61,"assert":7}],61:[function(require,module,exports){
+},{"../grouping/location":53,"../severities":62,"assert":7}],62:[function(require,module,exports){
 'use strict'
 
 const severityColors = [
@@ -30503,7 +30658,7 @@ module.exports = {
   , lowestSeverity
 }
 
-},{}],62:[function(require,module,exports){
+},{}],63:[function(require,module,exports){
 // Copyright 2009 the V8 project authors. All rights reserved.
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
@@ -30830,7 +30985,7 @@ if (typeof module === 'object' && typeof module.exports === 'object') {
   module.exports = CodeMap;
 } 
 
-},{"./splaytree.js":66}],63:[function(require,module,exports){
+},{"./splaytree.js":67}],64:[function(require,module,exports){
 // Copyright 2009 the V8 project authors. All rights reserved.
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
@@ -30938,7 +31093,7 @@ if (typeof module === 'object' && typeof module.exports === 'object') {
   module.exports = CsvParser;
 } 
 
-},{}],64:[function(require,module,exports){
+},{}],65:[function(require,module,exports){
 // Copyright 2011 the V8 project authors. All rights reserved.
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
@@ -31180,7 +31335,7 @@ if (typeof module === 'object' && typeof module.exports === 'object') {
   module.exports = LogReader;
 } 
 
-},{"./csvparser.js":63}],65:[function(require,module,exports){
+},{"./csvparser.js":64}],66:[function(require,module,exports){
 // Copyright 2009 the V8 project authors. All rights reserved.
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
@@ -32314,7 +32469,7 @@ JsonProfile.prototype.writeJson = function() {
   write('}\n');
 };
 
-},{"./codemap.js":62}],66:[function(require,module,exports){
+},{"./codemap.js":63}],67:[function(require,module,exports){
 // Copyright 2009 the V8 project authors. All rights reserved.
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
