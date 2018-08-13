@@ -2,6 +2,12 @@
 
 const { spawn } = require('ispawn')
 const { tmpdir } = require('os')
+const fs = require('fs')
+const { F_OK } = fs.constants
+const { promisify } = require('util')
+const access = promisify(fs.access)
+const mkdir = promisify(fs.mkdir)
+const stat = promisify(fs.stat)
 
 const { brightBlack } = require('ansicolors')
 
@@ -50,8 +56,27 @@ function determineArgs(args) {
   )
 }
 
+async function createDirIfMissing(dir) {
+  // assumes that parent dir exists for our use case
+  try {
+    await access(dir, F_OK)
+  } catch (err) {
+    // didn't exist (or at least we don't have access), try to create it
+    return mkdir(dir)
+  }
+
+  // It did exist, ensure it is a directory
+  const statInfo = await stat(dir)
+  if (!statInfo.isDirectory()) {
+    throw new Error(`Found ${dir}, but it wasn't a directory, please remove it.`)
+  }
+}
+
 async function createLog(args, head, simpleHead) {
   const { extraExecArgv, argv,  nodeExecutable } = determineArgs(args)
+
+  const logDir = `${tmpdir()}/deoptigate`
+  await createDirIfMissing(logDir)
 
   const logFile = `${tmpdir()}/deoptigate/v8.log`
 
