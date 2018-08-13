@@ -59,7 +59,7 @@ class FileDetailsView extends Component {
           highlightCode={highlightCode}
           onmarkerClicked={this._onmarkerClicked} />
         <SummaryView
-          className='flex-column vh-85 w-50'
+          className='flex-column vh-85 w-50 summary-view'
           file={selectedFile}
           relativePath={relativePath}
           selectedLocation={selectedLocation}

@@ -2,13 +2,22 @@
 @import './node_modules/peacock/styles/tango.css';
 @import url('https://fonts.googleapis.com/css?family=Source+Code+Pro');
 
+body {
+  overflow: hidden;
+}
+
+.code-view,
+.summary-view,
+.highlight pre {
+  overflow-x: auto;
+  overflow-y: hidden;
+  overflow: scroll;
+}
+
 .code-view,
 .highlight pre {
   font-size: 13px;
   font-family: 'Source Code Pro', monospace;
-  overflow-x: auto;
-  overflow-y: hidden;
-  overflow: scroll;
 }
 
 .code-view a,
