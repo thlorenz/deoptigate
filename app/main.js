@@ -1,9 +1,12 @@
 'use strict'
 
+/* global history */
+
 const React = require('react')
 const { Component } = React
 const { render } = require('react-dom')
 const { deoptigate } = require('../')
+const { urlFromState, stateFromUrl } = require('./lib/query-state')
 
 const { ToolbarView } = require('./components/toolbar')
 const { FilesView } = require('./components/files')
@@ -12,6 +15,12 @@ const { FileDetailsView } = require('./components/file-details')
 const FILES_TAB_IDX = 0
 const DETAILS_TAB_IDX = 1
 
+/*
+function assignIfNotNull(obj, key, val) {
+  if (val != null) obj[key] = val
+}
+*/
+
 function app() {
   // makes React happy
   document.body.innerHTML = ''
@@ -19,18 +28,25 @@ function app() {
   document.body.appendChild(el)
   return el
 }
+const initialState = {
+    selectedFile: null
+  , selectedLocation: null
+  , includeAllSeverities: false
+  , highlightCode: true
+  , selectedTabIdx: FILES_TAB_IDX
+}
 
 class MainView extends Component {
   constructor(props) {
     super(props)
-    this.state = {
-        selectedFile: null
-      , selectedLocation: 2
-      , includeAllSeverities: false
-      , highlightCode: true
-      , selectedTabIdx: FILES_TAB_IDX
-    }
+    this._initialState = initialState
+    this.state = Object.assign({}, this._initialState)
+
+    const { groups } = props
+    this._indexedGroups = Array.from(groups)
+
     this._bind()
+    window.onpopstate = this._restoreStateFromHistory
   }
 
   _bind() {
@@ -38,6 +54,8 @@ class MainView extends Component {
     this._onincludeAllSeveritiesChanged = this._onincludeAllSeveritiesChanged.bind(this)
     this._onhighlightCodeChanged = this._onhighlightCodeChanged.bind(this)
     this._onfileClicked = this._onfileClicked.bind(this)
+    this._updateUrl = this._updateUrl.bind(this)
+    this._restoreStateFromHistory = this._restoreStateFromHistory.bind(this)
   }
 
   render() {
@@ -133,22 +151,83 @@ class MainView extends Component {
   }
 
   /*
+   * URL State
+   */
+  _indexFromFile(file) {
+    for (var i = 0; i < this._indexedGroups.length; i++) {
+      const key = this._indexedGroups[i][0]
+      if (key === file) return i
+    }
+    return -1
+  }
+
+  _fileFromIndex(idx) {
+    if (idx < 0) return null
+    if (this._indexedGroups[idx] == null) return null
+    return this._indexedGroups[idx][0]
+  }
+
+  _updateUrl() {
+    const {
+        selectedFile
+      , selectedLocation
+      , includeAllSeverities
+      , highlightCode
+      , selectedTabIdx
+    } = this.state
+
+    const state = {
+        selectedFileIdx: this._indexFromFile(selectedFile)
+      , selectedLocation
+      , includeAllSeverities
+      , highlightCode
+      , selectedTabIdx
+    }
+    history.pushState(state, 'deoptigate', urlFromState(state))
+  }
+
+  _restoreStateFromHistory(e) {
+    if (history.state == null) return null
+
+    let {
+        selectedFileIdx
+      , selectedLocation
+      , includeAllSeverities
+      , highlightCode
+      , selectedTabIdx
+    } = history.state
+    if (selectedLocation === '') selectedLocation = null
+
+    const selectedFile = this._fileFromIndex(selectedFileIdx)
+    const override = {
+        includeAllSeverities
+      , highlightCode
+      , selectedFile
+      , selectedTabIdx
+      , selectedLocation
+    }
+
+    console.log(override)
+    this.setState(Object.assign(this.state, override))
+  }
+
+  /*
    * Events
    */
   _ontabHeaderClicked(idx) {
-    this.setState(Object.assign(this.state, { selectedTabIdx: idx }))
+    this.setState(Object.assign(this.state, { selectedTabIdx: idx }), this._updateUrl)
   }
 
   _onlocationSelected(id) {
-    this.setState(Object.assign(this.state, { selectedLocation: id }))
+    this.setState(Object.assign(this.state, { selectedLocation: id }), this._updateUrl)
   }
 
   _onincludeAllSeveritiesChanged(includeAllSeverities) {
-    this.setState(Object.assign(this.state, { includeAllSeverities, selectedLocation: null }))
+    this.setState(Object.assign(this.state, { includeAllSeverities, selectedLocation: null }), this._updateUrl)
   }
 
   _onhighlightCodeChanged(highlightCode) {
-    this.setState(Object.assign(this.state, { highlightCode }))
+    this.setState(Object.assign(this.state, { highlightCode }), this._updateUrl)
   }
 
   _onfileClicked(file) {
@@ -157,7 +236,7 @@ class MainView extends Component {
       , selectedLocation: null
       // auto open details view when file is sected
       , selectedTabIdx: DETAILS_TAB_IDX
-    }))
+    }), this._updateUrl)
   }
 }
 
