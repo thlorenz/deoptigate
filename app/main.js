@@ -184,7 +184,12 @@ class MainView extends Component {
       , highlightCode
       , selectedTabIdx
     }
-    history.pushState(state, 'deoptigate', urlFromState(state))
+    try {
+      history.pushState(state, 'deoptigate', urlFromState(state))
+    } catch (e) {
+      // some browsers like Safari block this in the name of security
+      // if we opened the index file directly, i.e. the page isn't served
+    }
   }
 
   _restoreStateFromHistory(e) {
