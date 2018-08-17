@@ -3,10 +3,26 @@
 /* global location */
 const qs = require('qs')
 
+function parseNum(s) {
+  return s === '' ? null : parseInt(s)
+}
+
+function parseBool(s) {
+  return s === 'true'
+}
+
 function stateFromUrl() {
   if (location.search == null || location.search.length < 2) return null
   const query = location.search.slice(1)
-  return qs.parse(query)
+  const queryState = qs.parse(query)
+  const state = {
+      highlightCode        : parseBool(queryState.highlightCode)
+    , includeAllSeverities : parseBool(queryState.includeAllSeverities)
+    , selectedFileIdx      : parseNum(queryState.selectedFileIdx)
+    , selectedLocation     : parseNum(queryState.selectedLocation)
+    , selectedTabIdx       : parseNum(queryState.selectedTabIdx)
+  }
+  return state
 }
 
 function urlFromState(state) {

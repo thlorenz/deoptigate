@@ -4,7 +4,7 @@
   "description": "Investigates v8/Node.js function deoptimizations in the browser.",
   "main": "main.js",
   "scripts": {
-    "start": "budo ./main.js --css ./main.css -p 9922",
+    "start": "budo ./client.js --css ./main.css -p 9922",
     "bundle": "npm run bundle-js && npm run bundle-css",
     "bundle-js": "browserify main.js --standalone deoptigateRender > build/deoptigate.js",
     "bundle-css": "postcss -u=postcss-import postcss-clean --no-map main.css -o /tmp/post.css && purifycss ./build/deoptigate.js -i -m -o ./build/deoptigate.css /tmp/post.css && rm -f /tmp/post.css"

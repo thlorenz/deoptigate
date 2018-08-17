@@ -39,11 +39,12 @@ const initialState = {
 class MainView extends Component {
   constructor(props) {
     super(props)
-    this._initialState = initialState
-    this.state = Object.assign({}, this._initialState)
 
     const { groups } = props
     this._indexedGroups = Array.from(groups)
+
+    this._initialState = Object.assign(initialState, this._stateFromUrl())
+    this.state = Object.assign({}, this._initialState)
 
     this._bind()
     window.onpopstate = this._restoreStateFromHistory
@@ -207,8 +208,27 @@ class MainView extends Component {
       , selectedLocation
     }
 
-    console.log(override)
     this.setState(Object.assign(this.state, override))
+  }
+
+  _stateFromUrl() {
+    const state = stateFromUrl()
+    if (state == null) return null
+    const {
+        selectedFileIdx
+      , selectedLocation
+      , includeAllSeverities
+      , highlightCode
+      , selectedTabIdx
+    } = state
+    const selectedFile = this._fileFromIndex(selectedFileIdx)
+    return {
+        selectedFile
+      , selectedLocation
+      , includeAllSeverities
+      , highlightCode
+      , selectedTabIdx
+    }
   }
 
   /*
