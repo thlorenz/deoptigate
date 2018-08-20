@@ -41,12 +41,20 @@ class SummaryView extends Component {
     this._renderCode = this._renderCode.bind(this)
   }
 
-  componentDidUpdate() {
+  _maybeScrollIntoView() {
     const { selectedLocation } = this.props
     if (selectedLocation == null) return
     const summary = document.getElementById(`summary-location-${selectedLocation}`)
     if (summary == null) return
     scrollIntoView(summary, { behavior: 'smooth', scrollMode: 'if-needed' })
+  }
+
+  componentDidMount() {
+    this._maybeScrollIntoView()
+  }
+
+  componentDidUpdate() {
+    this._maybeScrollIntoView()
   }
 
   render() {

@@ -27,6 +27,14 @@ class CodeView extends Component {
     this._onmarkerClicked = this._onmarkerClicked.bind(this)
   }
 
+  _maybeScrollIntoView() {
+    const { selectedLocation } = this.props
+    if (selectedLocation == null) return
+    const code = document.getElementById(`code-location-${selectedLocation}`)
+    if (code == null) return
+    scrollIntoView(code, { behavior: 'smooth', scrollMode: 'if-needed' })
+  }
+
   componentDidMount() {
     const rootEl = ReactDOM.findDOMNode(this)
     rootEl.addEventListener('click', event => {
@@ -37,14 +45,11 @@ class CodeView extends Component {
       event.stopPropagation()
       this._onmarkerClicked(parseInt(markerid), markertype)
     })
+    this._maybeScrollIntoView()
   }
 
   componentDidUpdate() {
-    const { selectedLocation } = this.props
-    if (selectedLocation == null) return
-    const code = document.getElementById(`code-location-${selectedLocation}`)
-    if (code == null) return
-    scrollIntoView(code, { behavior: 'smooth', scrollMode: 'if-needed' })
+    this._maybeScrollIntoView()
   }
 
   shouldComponentUpdate(nextProps) {

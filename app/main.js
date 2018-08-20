@@ -10,16 +10,11 @@ const { urlFromState, stateFromUrl } = require('./lib/query-state')
 
 const { ToolbarView } = require('./components/toolbar')
 const { FilesView } = require('./components/files')
+const { SummaryView } = require('./components/summary')
 const { FileDetailsView } = require('./components/file-details')
 
 const FILES_TAB_IDX = 0
 const DETAILS_TAB_IDX = 1
-
-/*
-function assignIfNotNull(obj, key, val) {
-  if (val != null) obj[key] = val
-}
-*/
 
 function app() {
   // makes React happy
@@ -28,9 +23,11 @@ function app() {
   document.body.appendChild(el)
   return el
 }
+
 const initialState = {
     selectedFile: null
   , selectedLocation: null
+  , selectedSummaryTabIdx: SummaryView.OPT_TAB_IDX
   , includeAllSeverities: false
   , highlightCode: true
   , selectedTabIdx: FILES_TAB_IDX
@@ -52,6 +49,7 @@ class MainView extends Component {
 
   _bind() {
     this._onlocationSelected = this._onlocationSelected.bind(this)
+    this._onsummaryTabIdxChanged = this._onsummaryTabIdxChanged.bind(this)
     this._onincludeAllSeveritiesChanged = this._onincludeAllSeveritiesChanged.bind(this)
     this._onhighlightCodeChanged = this._onhighlightCodeChanged.bind(this)
     this._onfileClicked = this._onfileClicked.bind(this)
@@ -128,7 +126,13 @@ class MainView extends Component {
 
   _renderFileDetails(selected) {
     const { groups } = this.props
-    const { selectedFile, selectedLocation, includeAllSeverities, highlightCode } = this.state
+    const {
+        selectedFile
+      , selectedLocation
+      , selectedSummaryTabIdx
+      , includeAllSeverities
+      , highlightCode
+    } = this.state
     const display = selected ? 'flex' : 'dn'
     const className = `${display} flex-row w-100 ma2`
     if (selectedFile == null || !groups.has(selectedFile)) {
@@ -142,11 +146,13 @@ class MainView extends Component {
         groups={groups}
         selectedFile={selectedFile}
         selectedLocation={selectedLocation}
+        selectedSummaryTabIdx={selectedSummaryTabIdx}
         includeAllSeverities={includeAllSeverities}
         highlightCode={highlightCode}
         className={className}
         onmarkerClicked={this._onlocationSelected}
         onsummaryClicked={this._onlocationSelected}
+        onsummaryTabIdxChanged={this._onsummaryTabIdxChanged}
       />
     )
   }
@@ -175,6 +181,7 @@ class MainView extends Component {
       , includeAllSeverities
       , highlightCode
       , selectedTabIdx
+      , selectedSummaryTabIdx
     } = this.state
 
     const state = {
@@ -183,6 +190,7 @@ class MainView extends Component {
       , includeAllSeverities
       , highlightCode
       , selectedTabIdx
+      , selectedSummaryTabIdx
     }
     try {
       history.pushState(state, 'deoptigate', urlFromState(state))
@@ -201,6 +209,7 @@ class MainView extends Component {
       , includeAllSeverities
       , highlightCode
       , selectedTabIdx
+      , selectedSummaryTabIdx
     } = history.state
     if (selectedLocation === '') selectedLocation = null
 
@@ -211,6 +220,7 @@ class MainView extends Component {
       , selectedFile
       , selectedTabIdx
       , selectedLocation
+      , selectedSummaryTabIdx
     }
 
     this.setState(Object.assign(this.state, override))
@@ -225,6 +235,7 @@ class MainView extends Component {
       , includeAllSeverities
       , highlightCode
       , selectedTabIdx
+      , selectedSummaryTabIdx
     } = state
     const selectedFile = this._fileFromIndex(selectedFileIdx)
     return {
@@ -233,6 +244,7 @@ class MainView extends Component {
       , includeAllSeverities
       , highlightCode
       , selectedTabIdx
+      , selectedSummaryTabIdx
     }
   }
 
@@ -247,6 +259,10 @@ class MainView extends Component {
     this.setState(Object.assign(this.state, { selectedLocation: id }), this._updateUrl)
   }
 
+  _onsummaryTabIdxChanged(idx) {
+    this.setState(Object.assign(this.state, { selectedSummaryTabIdx: idx }), this._updateUrl)
+  }
+
   _onincludeAllSeveritiesChanged(includeAllSeverities) {
     this.setState(Object.assign(this.state, { includeAllSeverities, selectedLocation: null }), this._updateUrl)
   }
@@ -259,7 +275,7 @@ class MainView extends Component {
     this.setState(Object.assign(this.state, {
         selectedFile: file
       , selectedLocation: null
-      // auto open details view when file is sected
+      // auto open details view when file is selected
       , selectedTabIdx: DETAILS_TAB_IDX
     }), this._updateUrl)
   }

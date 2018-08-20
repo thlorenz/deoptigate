@@ -6,10 +6,15 @@ const { Component } = React
 const { CodeView } = require('./code')
 const { SummaryView } = require('./summary')
 
+const assert = require('assert')
+
 class FileDetailsView extends Component {
   constructor(props) {
     super(props)
-    this.state = { selectedSummaryTabIdx: SummaryView.OPT_TAB_IDX }
+
+    const { onsummaryTabIdxChanged } = props
+    assert.equal(typeof onsummaryTabIdxChanged, 'function', 'need to pass onsummaryTabIdxChanged function')
+
     this._bind()
   }
 
@@ -26,10 +31,9 @@ class FileDetailsView extends Component {
       , includeAllSeverities
       , highlightCode
       , className = ''
+      , selectedSummaryTabIdx
       , onsummaryClicked
     } = this.props
-
-    const { selectedSummaryTabIdx } = this.state
 
     const {
         ics
@@ -78,18 +82,25 @@ class FileDetailsView extends Component {
   }
 
   _onmarkerClicked(id, type) {
-    const { onmarkerClicked } = this.props
-    const selectedSummaryTabIdx = (
+    const {
+        onmarkerClicked
+      , onsummaryTabIdxChanged
+      , selectedSummaryTabIdx
+    } = this.props
+    const markerSummaryTabIdx = (
         type === 'code' ? SummaryView.OPT_TAB_IDX
       : type === 'deopt' ? SummaryView.DEOPT_TAB_IDX
       : SummaryView.ICS_TAB_IDX
     )
-    this.setState(Object.assign(this.state, { selectedSummaryTabIdx }))
     onmarkerClicked(id)
+    if (markerSummaryTabIdx !== selectedSummaryTabIdx) {
+      onsummaryTabIdxChanged(markerSummaryTabIdx)
+    }
   }
 
   _onsummaryTabHeaderClicked(idx) {
-    this.setState(Object.assign(this.state, { selectedSummaryTabIdx: idx }))
+    const { onsummaryTabIdxChanged } = this.props
+    onsummaryTabIdxChanged(idx)
   }
 }
 
