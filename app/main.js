@@ -87,7 +87,7 @@ class MainView extends Component {
     const selected = idx === selectedTabIdx
     const baseClass = 'flex flex-column ttu dib link pa3 bt outline-0 tab-header'
     const selectedClass = 'b--blue blue'
-    const unselectedClass = 'black b--white'
+    const unselectedClass = 'white b--white'
     const className = selected ? `${baseClass} ${selectedClass}` : `${baseClass} ${unselectedClass}`
 
     return <a className={className} href='#' onClick={() => this._ontabHeaderClicked(idx)}>{label}</a>

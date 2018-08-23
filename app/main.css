@@ -1,9 +1,69 @@
 @import './node_modules/tachyons/css/tachyons.css';
 @import './node_modules/peacock/styles/tango.css';
+@import url('https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,400i,600');
 @import url('https://fonts.googleapis.com/css?family=Source+Code+Pro');
+
+html {
+  background: #4a5859;
+}
 
 body {
   overflow: hidden;
+  font-family: 'Source Sans Pro', sans-serif;
+  padding:15px;
+}
+
+
+/*
+ * Tachyons Overrides/Additions
+ */
+
+.b { font-weight: 600; }
+
+.green { color: #5ac878; }
+.blue { color: #4cb5ff; }
+.red { color: #ff6040; }
+.basegreen  { color: #4a5859; }
+
+.bg-light-green { background-color: #e1e7e6; }
+
+.vh-85 { height: 85vh; }
+.vh-15 { height: 15vh; }
+
+/* 
+ * Table
+ */
+
+.header-row {
+  background-color: #89a19d;
+  text-transform: uppercase;
+  font-size:1.1em;
+  color: #ffffff;
+}
+
+.subhead {
+  background-color:#353d3e;
+  font-size: 0.9em;
+  color: #ffffff;
+}
+
+
+tbody {
+	background-color: #e1e7e6
+}
+
+.underlined {
+	border-bottom: 1px solid #89a19d;
+	padding-top:1.25em;
+	padding-bottom:1.25em;
+}
+
+.normalrow:hover {
+	background-color: #f5f7f7;
+}
+
+a.items {
+  color: #4a5859;
 }
 
 .code-view,
@@ -42,6 +102,3 @@ body {
   background: yellow;
   padding: 2px;
 }
-
-.vh-85 { height: 85vh; }
-.vh-15 { height: 15vh; }

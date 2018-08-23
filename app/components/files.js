@@ -6,18 +6,18 @@ const summarizeFile = require('../../lib/grouping/summarize-file')
 const assert = require('assert')
 
 const severityClassNames = [
-    'green i'
-  , 'blue'
-  , 'red b'
+    'green i tc'
+  , 'blue tc'
+  , 'red b tc'
 ]
 
-const underlineTdClass = ' bb b--silver pt2 pb2'
+const underlineTdClass = ' pl2 pr2 underlined '
 
 function coloredTds(arr) {
   return arr.map((x, idx) => {
     const className = x > 0
       ? severityClassNames[idx] + ' tr' + underlineTdClass
-      : 'silver i tr' + underlineTdClass
+      : ' pl2 pr2 tc' + underlineTdClass
     return <td key={idx} className={className}>{x}</td>
   })
 }
@@ -69,17 +69,18 @@ class FilesView extends Component {
   }
 
   _renderTableHeader() {
-    const topHeaderClass = 'bt br bl bw1 b--silver bg-light-green tc br1'
-    const subHeaderClass = 'bb br bl bw1 b--silver br1'
+    const topHeaderClass = 'tc header-row pt2 pb1 '
+    const subHeaderClass = 'pa1 pl2 pr2 subhead'
     return (
       <thead>
         <tr>
-          <td className={topHeaderClass + ' bb'} rowSpan='2'>File</td>
+          <td className={topHeaderClass + ' '}>File</td>
           <td colSpan='3' className={topHeaderClass}>Optimizations</td>
           <td colSpan='3' className={topHeaderClass}>Deoptimizations</td>
           <td colSpan='3' className={topHeaderClass}>Inline Caches</td>
         </tr>
         <tr>
+          <td className={subHeaderClass} />
           <td className={subHeaderClass}>Optimized</td>
           <td className={subHeaderClass}>Optimizable</td>
           <td className={subHeaderClass}>Compiled</td>
@@ -105,9 +106,9 @@ class FilesView extends Component {
     const onfileClicked = this._onfileClicked.bind(this, file)
     const selectedClass = file === selectedFile ? 'bg-light-yellow' : ''
     return (
-      <tr key={relativePath} className={'bb b--silver ' + selectedClass}>
-        <td>
-          <a className={'i silver' + underlineTdClass}
+      <tr key={relativePath} className={'normalrow ' + selectedClass}>
+        <td class='underlined'>
+          <a className={'items pl2 pr2'}
             href='#'
             onClick={onfileClicked}>
             {relativePath}

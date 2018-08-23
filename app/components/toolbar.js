@@ -34,10 +34,10 @@ class ToolbarView extends Component {
   _renderSeverityOption() {
     const { includeAllSeverities } = this.props
     return (
-      <span className='pr2 pl2'>
+      <span className='white pr2 pl2'>
         Low Severities
         <input
-          className='pointer'
+          className='ml1 pointer'
           type='checkbox'
           defaultChecked={!!includeAllSeverities}
           onChange={this._onincludeAllSeveritiesToggled} />
@@ -48,10 +48,10 @@ class ToolbarView extends Component {
   _renderHighlightCodeOption() {
     const { highlightCode } = this.props
     return (
-      <span className='pr2 pl2'>
+      <span className='white pr2 pl2'>
         Highlight Code
         <input
-          className='pointer'
+          className='ml1 pointer'
           type='checkbox'
           defaultChecked={!!highlightCode}
           onChange={this._onhighlightCodeToggled} />
