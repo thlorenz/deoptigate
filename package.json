@@ -5,7 +5,8 @@
   "bin": "./bin/deoptigate",
   "main": "deoptigate.js",
   "files": [
-    "app/",
+    "app/build",
+    "app/lib",
     "bin/",
     "lib/",
     "deoptigate*"
