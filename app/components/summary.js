@@ -215,7 +215,7 @@ class SummaryView extends Component {
     const timeStampMs = (timestamp / 1E3).toFixed()
     return (
       <tr key={timestamp}>
-        <td>{timeStampMs + ' pr3'}ms</td>
+        <td>{timeStampMs}ms</td>
         <td className={bailoutClassName + ' pr3'}>{bailoutType}</td>
         <td className='pr3'>{deoptReason}</td>
         <td className='gray pr3'>{inlined ? 'yes' : 'no'}</td>
