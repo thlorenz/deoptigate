@@ -238,7 +238,7 @@ function coloredTds(arr) {
   return arr.map((x, idx) => {
     const className = x > 0
       ? severityClassNames[idx] + ' tr' + underlineTdClass
-      : ' pl2 pr2 tc' + underlineTdClass
+      : ' pl2 pr2 tc i gray' + underlineTdClass
     return React.createElement( 'td', { key: idx, className: className }, x)
   })
 }
@@ -580,7 +580,7 @@ class SummaryView extends Component {
     const timeStampMs = (timestamp / 1E3).toFixed()
     return (
       React.createElement( 'tr', { key: timestamp },
-        React.createElement( 'td', null, timeStampMs + ' pr3', "ms" ),
+        React.createElement( 'td', null, timeStampMs, "ms" ),
         React.createElement( 'td', { className: bailoutClassName + ' pr3' }, bailoutType),
         React.createElement( 'td', { className: 'pr3' }, deoptReason),
         React.createElement( 'td', { className: 'gray pr3' }, inlined ? 'yes' : 'no')
