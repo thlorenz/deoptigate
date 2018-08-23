@@ -17,7 +17,7 @@ function coloredTds(arr) {
   return arr.map((x, idx) => {
     const className = x > 0
       ? severityClassNames[idx] + ' tr' + underlineTdClass
-      : ' pl2 pr2 tc' + underlineTdClass
+      : ' pl2 pr2 tc i gray' + underlineTdClass
     return <td key={idx} className={className}>{x}</td>
   })
 }
