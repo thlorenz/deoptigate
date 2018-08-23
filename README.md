@@ -6,7 +6,7 @@ Investigates v8/Node.js function deoptimizations.
 deoptigate app.js
 ```
 
-[![vector](assets/vector.png)](https://thlorenz.com/deoptigate/vector/)
+[![xml2js](assets/xml2js.png)](https://thlorenz.com/deoptigate-examples/xml2js/01_start/?selectedFileIdx=31&selectedLocation=157&includeAllSeverities=false&highlightCode=true&selectedTabIdx=1&selectedSummaryTabIdx=1)
 
 ## Installation
 
