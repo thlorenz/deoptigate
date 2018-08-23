@@ -28,6 +28,14 @@ class CodeView extends Component {
     this._onmarkerClicked = this._onmarkerClicked.bind(this)
   }
 
+  _maybeScrollIntoView() {
+    const { selectedLocation } = this.props
+    if (selectedLocation == null) { return }
+    const code = document.getElementById(`code-location-${selectedLocation}`)
+    if (code == null) { return }
+    scrollIntoView(code, { behavior: 'smooth', scrollMode: 'if-needed' })
+  }
+
   componentDidMount() {
     const rootEl = ReactDOM.findDOMNode(this)
     rootEl.addEventListener('click', event => {
@@ -38,14 +46,11 @@ class CodeView extends Component {
       event.stopPropagation()
       this._onmarkerClicked(parseInt(markerid), markertype)
     })
+    this._maybeScrollIntoView()
   }
 
   componentDidUpdate() {
-    const { selectedLocation } = this.props
-    if (selectedLocation == null) { return }
-    const code = document.getElementById(`code-location-${selectedLocation}`)
-    if (code == null) { return }
-    scrollIntoView(code, { behavior: 'smooth', scrollMode: 'if-needed' })
+    this._maybeScrollIntoView()
   }
 
   shouldComponentUpdate(nextProps) {
@@ -129,7 +134,7 @@ module.exports = {
   CodeView
 }
 
-},{"../../lib/rendering/mark-only":60,"../../lib/rendering/marker-resolver":61,"../theme.browser":50,"assert":7,"peacock":15,"react":40,"react-dom":20,"scroll-into-view-if-needed":48}],2:[function(require,module,exports){
+},{"../../lib/rendering/mark-only":66,"../../lib/rendering/marker-resolver":67,"../theme.browser":56,"assert":8,"peacock":16,"react":46,"react-dom":26,"scroll-into-view-if-needed":54}],2:[function(require,module,exports){
 'use strict'
 
 const React = require('react')
@@ -138,10 +143,15 @@ const { Component } = React
 const { CodeView } = require('./code')
 const { SummaryView } = require('./summary')
 
+const assert = require('assert')
+
 class FileDetailsView extends Component {
   constructor(props) {
     super(props)
-    this.state = { selectedSummaryTabIdx: SummaryView.OPT_TAB_IDX }
+
+    const { onsummaryTabIdxChanged } = props
+    assert.equal(typeof onsummaryTabIdxChanged, 'function', 'need to pass onsummaryTabIdxChanged function')
+
     this._bind()
   }
 
@@ -158,10 +168,9 @@ class FileDetailsView extends Component {
       , includeAllSeverities
       , highlightCode
       , className = ''
+      , selectedSummaryTabIdx
       , onsummaryClicked
     } = this.props
-
-    const { selectedSummaryTabIdx } = this.state
 
     const {
         ics
@@ -185,24 +194,31 @@ class FileDetailsView extends Component {
   }
 
   _onmarkerClicked(id, type) {
-    const { onmarkerClicked } = this.props
-    const selectedSummaryTabIdx = (
+    const {
+        onmarkerClicked
+      , onsummaryTabIdxChanged
+      , selectedSummaryTabIdx
+    } = this.props
+    const markerSummaryTabIdx = (
         type === 'code' ? SummaryView.OPT_TAB_IDX
       : type === 'deopt' ? SummaryView.DEOPT_TAB_IDX
       : SummaryView.ICS_TAB_IDX
     )
-    this.setState(Object.assign(this.state, { selectedSummaryTabIdx }))
     onmarkerClicked(id)
+    if (markerSummaryTabIdx !== selectedSummaryTabIdx) {
+      onsummaryTabIdxChanged(markerSummaryTabIdx)
+    }
   }
 
   _onsummaryTabHeaderClicked(idx) {
-    this.setState(Object.assign(this.state, { selectedSummaryTabIdx: idx }))
+    const { onsummaryTabIdxChanged } = this.props
+    onsummaryTabIdxChanged(idx)
   }
 }
 
 module.exports = { FileDetailsView }
 
-},{"./code":1,"./summary":4,"react":40}],3:[function(require,module,exports){
+},{"./code":1,"./summary":4,"assert":8,"react":46}],3:[function(require,module,exports){
 'use strict'
 
 const React = require('react')
@@ -211,18 +227,18 @@ const summarizeFile = require('../../lib/grouping/summarize-file')
 const assert = require('assert')
 
 const severityClassNames = [
-    'green i'
-  , 'blue'
-  , 'red b'
+    'green i tc'
+  , 'blue tc'
+  , 'red b tc'
 ]
 
-const underlineTdClass = ' bb b--silver pt2 pb2'
+const underlineTdClass = ' pl2 pr2 underlined '
 
 function coloredTds(arr) {
   return arr.map((x, idx) => {
     const className = x > 0
       ? severityClassNames[idx] + ' tr' + underlineTdClass
-      : 'silver i tr' + underlineTdClass
+      : ' pl2 pr2 tc' + underlineTdClass
     return React.createElement( 'td', { key: idx, className: className }, x)
   })
 }
@@ -284,17 +300,18 @@ class FilesView extends Component {
   }
 
   _renderTableHeader() {
-    const topHeaderClass = 'bt br bl bw1 b--silver bg-light-green tc br1'
-    const subHeaderClass = 'bb br bl bw1 b--silver br1'
+    const topHeaderClass = 'tc header-row pt2 pb1 '
+    const subHeaderClass = 'pa1 pl2 pr2 subhead'
     return (
       React.createElement( 'thead', null,
         React.createElement( 'tr', null,
-          React.createElement( 'td', { className: topHeaderClass + ' bb', rowSpan: '2' }, "File"),
+          React.createElement( 'td', { className: topHeaderClass + ' ' }, "File"),
           React.createElement( 'td', { colSpan: '3', className: topHeaderClass }, "Optimizations"),
           React.createElement( 'td', { colSpan: '3', className: topHeaderClass }, "Deoptimizations"),
           React.createElement( 'td', { colSpan: '3', className: topHeaderClass }, "Inline Caches")
         ),
         React.createElement( 'tr', null,
+          React.createElement( 'td', { className: subHeaderClass }),
           React.createElement( 'td', { className: subHeaderClass }, "Optimized"),
           React.createElement( 'td', { className: subHeaderClass }, "Optimizable"),
           React.createElement( 'td', { className: subHeaderClass }, "Compiled"),
@@ -326,9 +343,9 @@ class FilesView extends Component {
     const onfileClicked = this._onfileClicked.bind(this, file)
     const selectedClass = file === selectedFile ? 'bg-light-yellow' : ''
     return (
-      React.createElement( 'tr', { key: relativePath, className: 'bb b--silver ' + selectedClass },
-        React.createElement( 'td', null,
-          React.createElement( 'a', { className: 'i silver' + underlineTdClass, href: '#', onClick: onfileClicked },
+      React.createElement( 'tr', { key: relativePath, className: 'normalrow ' + selectedClass },
+        React.createElement( 'td', { class: 'underlined' },
+          React.createElement( 'a', { className: 'items pl2 pr2', href: '#', onClick: onfileClicked },
             relativePath
           )
         ),
@@ -347,7 +364,7 @@ class FilesView extends Component {
 
 module.exports = { FilesView }
 
-},{"../../lib/grouping/summarize-file":54,"assert":7,"react":40}],4:[function(require,module,exports){
+},{"../../lib/grouping/summarize-file":60,"assert":8,"react":46}],4:[function(require,module,exports){
 'use strict'
 
 const React = require('react')
@@ -391,12 +408,20 @@ class SummaryView extends Component {
     this._renderCode = this._renderCode.bind(this)
   }
 
-  componentDidUpdate() {
+  _maybeScrollIntoView() {
     const { selectedLocation } = this.props
     if (selectedLocation == null) { return }
     const summary = document.getElementById(`summary-location-${selectedLocation}`)
     if (summary == null) { return }
     scrollIntoView(summary, { behavior: 'smooth', scrollMode: 'if-needed' })
+  }
+
+  componentDidMount() {
+    this._maybeScrollIntoView()
+  }
+
+  componentDidUpdate() {
+    this._maybeScrollIntoView()
   }
 
   render() {
@@ -438,7 +463,7 @@ class SummaryView extends Component {
     const selected = idx === selectedTabIdx
     const baseClass = 'flex flex-column ttu dib link pa3 bt outline-0 tab-header'
     const selectedClass = 'b--blue blue'
-    const unselectedClass = 'black b--white'
+    const unselectedClass = 'white b--white'
     const className = selected ? `${baseClass} ${selectedClass}` : `${baseClass} ${unselectedClass}`
 
     return React.createElement( 'a', { className: className, href: '#', onClick: () => this._ontabHeaderClicked(idx) }, label)
@@ -452,7 +477,7 @@ class SummaryView extends Component {
       const info = data.get(loc)
       if (!includeAllSeverities && info.severity <= MIN_SEVERITY) { continue }
 
-      const highlightedClass = selectedLocation === info.id ? 'bg-light-yellow' : 'bg-light-gray'
+      const highlightedClass = selectedLocation === info.id ? 'bg-light-yellow' : 'bg-light-green'
       const className = `${highlightedClass} ba br2 bw1 ma3 pa2`
       rendered.push(
         React.createElement( 'div', { className: className, key: info.id },
@@ -512,7 +537,7 @@ class SummaryView extends Component {
     }
 
     const fullLoc = (
-      React.createElement( 'a', { href: '#', className: 'i gray', onClick: onclicked },
+      React.createElement( 'a', { href: '#', className: 'i items', onClick: onclicked },
         functionName, " at ", relativePath, ":", line, ":", column
       )
     )
@@ -528,12 +553,12 @@ class SummaryView extends Component {
     const rows = info.updates.map((update, idx) => this._deoptRow(update, idx))
     return (
       React.createElement( 'table', { key: 'deopt:' + info.id },
-        React.createElement( 'thead', { className: 'f5 b tc' },
+        React.createElement( 'thead', { className: 'f5 b pt2' },
           React.createElement( 'tr', null,
-            React.createElement( 'td', null, "Timestamp" ),
-            React.createElement( 'td', null, "Bailout" ),
-            React.createElement( 'td', null, "Reason" ),
-            React.createElement( 'td', null, "Inlined" )
+            React.createElement( 'td', { class: 'pt2 pr3 basegreen' }, "Timestamp"),
+            React.createElement( 'td', { class: 'pt2 pr3 basegreen' }, "Bailout"),
+            React.createElement( 'td', { class: 'pt2 pr3 basegreen' }, "Reason"),
+            React.createElement( 'td', { class: 'pt2 pr3 basegreen' }, "Inlined")
           )
         ),
         React.createElement( 'tbody', null,
@@ -555,10 +580,10 @@ class SummaryView extends Component {
     const timeStampMs = (timestamp / 1E3).toFixed()
     return (
       React.createElement( 'tr', { key: timestamp },
-        React.createElement( 'td', null, timeStampMs, "ms" ),
-        React.createElement( 'td', { className: bailoutClassName }, bailoutType),
-        React.createElement( 'td', { className: 'tr' }, deoptReason),
-        React.createElement( 'td', { className: 'gray tr' }, inlined ? 'yes' : 'no')
+        React.createElement( 'td', null, timeStampMs + ' pr3', "ms" ),
+        React.createElement( 'td', { className: bailoutClassName + ' pr3' }, bailoutType),
+        React.createElement( 'td', { className: 'pr3' }, deoptReason),
+        React.createElement( 'td', { className: 'gray pr3' }, inlined ? 'yes' : 'no')
       )
     )
   }
@@ -567,12 +592,12 @@ class SummaryView extends Component {
     const rows = info.updates.map((update, idx) => this._icRow(update, idx))
     return (
       React.createElement( 'table', { key: 'ic:' + info.id },
-        React.createElement( 'thead', { className: 'f5 b tc' },
+        React.createElement( 'thead', { className: 'f5 b ' },
           React.createElement( 'tr', null,
-            React.createElement( 'td', null, "Old State" ),
-            React.createElement( 'td', null, "New State" ),
-            React.createElement( 'td', null, "Key" ),
-            React.createElement( 'td', null, "Map" )
+            React.createElement( 'td', { class: 'pt2 pr3 basegreen' }, "Old State"),
+            React.createElement( 'td', { class: 'pt2 pr3 basegreen' }, "New State"),
+            React.createElement( 'td', { class: 'pt2 pr3 basegreen' }, "Key"),
+            React.createElement( 'td', { class: 'pt2 pr3 basegreen' }, "Map")
           )
         ),
         React.createElement( 'tbody', null,
@@ -600,10 +625,10 @@ class SummaryView extends Component {
     const mapString = `0x${map}`
     return (
       React.createElement( 'tr', { key: key + id },
-        React.createElement( 'td', { className: oldStateClassName }, oldStateName),
-        React.createElement( 'td', { className: newStateClassName }, newStateName),
-        React.createElement( 'td', { className: 'black tl' }, key),
-        React.createElement( 'td', { className: 'gray tr' }, mapString)
+        React.createElement( 'td', { className: oldStateClassName + ' pr3' }, oldStateName),
+        React.createElement( 'td', { className: newStateClassName + ' pr3' }, newStateName),
+        React.createElement( 'td', { className: 'black pr3' }, key),
+        React.createElement( 'td', { className: 'gray pr3' }, mapString)
       )
     )
   }
@@ -612,10 +637,10 @@ class SummaryView extends Component {
     const rows = info.updates.map((update, idx) => this._codeRow(update, idx))
     return (
       React.createElement( 'table', { key: 'code:' + info.id },
-        React.createElement( 'thead', { className: 'f5 b tc' },
+        React.createElement( 'thead', { className: 'f5 b ' },
           React.createElement( 'tr', null,
-            React.createElement( 'td', null, "Timestamp" ),
-            React.createElement( 'td', null, "Optimization State" )
+            React.createElement( 'td', { class: 'pt2 pr3 basegreen' }, "Timestamp"),
+            React.createElement( 'td', { class: 'pt2 pr3 basegreen' }, "Optimization State")
           )
         ),
         React.createElement( 'tbody', null,
@@ -635,7 +660,7 @@ class SummaryView extends Component {
     return (
       React.createElement( 'tr', { key: timestamp },
         React.createElement( 'td', null, timeStampMs, "ms" ),
-        React.createElement( 'td', { className: codeStateClassName }, codeState)
+        React.createElement( 'td', { className: codeStateClassName + ' pr3' }, codeState)
       )
     )
   }
@@ -661,7 +686,7 @@ module.exports = {
   SummaryView
 }
 
-},{"../../lib/log-processing/ic-state":58,"../../lib/log-processing/optimization-state":59,"../../lib/severities":62,"assert":7,"react":40,"scroll-into-view-if-needed":48}],5:[function(require,module,exports){
+},{"../../lib/log-processing/ic-state":64,"../../lib/log-processing/optimization-state":65,"../../lib/severities":68,"assert":8,"react":46,"scroll-into-view-if-needed":54}],5:[function(require,module,exports){
 'use strict'
 
 const React = require('react')
@@ -698,8 +723,8 @@ class ToolbarView extends Component {
   _renderSeverityOption() {
     const { includeAllSeverities } = this.props
     return (
-      React.createElement( 'span', { className: 'pr2 pl2' }, "Low Severities ", React.createElement( 'input', {
-          className: 'pointer', type: 'checkbox', defaultChecked: !!includeAllSeverities, onChange: this._onincludeAllSeveritiesToggled })
+      React.createElement( 'span', { className: 'white pr2 pl2' }, "Low Severities ", React.createElement( 'input', {
+          className: 'ml1 pointer', type: 'checkbox', defaultChecked: !!includeAllSeverities, onChange: this._onincludeAllSeveritiesToggled })
       )
     )
   }
@@ -707,8 +732,8 @@ class ToolbarView extends Component {
   _renderHighlightCodeOption() {
     const { highlightCode } = this.props
     return (
-      React.createElement( 'span', { className: 'pr2 pl2' }, "Highlight Code ", React.createElement( 'input', {
-          className: 'pointer', type: 'checkbox', defaultChecked: !!highlightCode, onChange: this._onhighlightCodeToggled })
+      React.createElement( 'span', { className: 'white pr2 pl2' }, "Highlight Code ", React.createElement( 'input', {
+          className: 'ml1 pointer', type: 'checkbox', defaultChecked: !!highlightCode, onChange: this._onhighlightCodeToggled })
       )
     )
   }
@@ -728,16 +753,62 @@ module.exports = {
   ToolbarView
 }
 
-},{"assert":7,"react":40}],6:[function(require,module,exports){
+},{"assert":8,"react":46}],6:[function(require,module,exports){
 'use strict'
+
+/* global location */
+const qs = require('qs')
+
+function parseNum(s) {
+  return s === '' ? null : parseInt(s)
+}
+
+function parseBool(s) {
+  return s === 'true'
+}
+
+function stateFromUrl() {
+  if (location.search == null || location.search.length < 2) { return null }
+  const query = location.search.slice(1)
+  const queryState = qs.parse(query)
+  const state = {
+      highlightCode         : parseBool(queryState.highlightCode)
+    , includeAllSeverities  : parseBool(queryState.includeAllSeverities)
+    , selectedFileIdx       : parseNum(queryState.selectedFileIdx)
+    , selectedLocation      : parseNum(queryState.selectedLocation)
+    , selectedTabIdx        : parseNum(queryState.selectedTabIdx)
+    , selectedSummaryTabIdx : parseNum(queryState.selectedSummaryTabIdx)
+  }
+  return state
+}
+
+function urlFromState(state) {
+  const rootUrl = location.origin
+  const path = location.pathname
+  const queryString = qs.stringify(state)
+  const url = `${rootUrl}${path}?${queryString}`
+  return url
+}
+
+module.exports = {
+    stateFromUrl
+  , urlFromState
+}
+
+},{"qs":20}],7:[function(require,module,exports){
+'use strict'
+
+/* global history */
 
 const React = require('react')
 const { Component } = React
 const { render } = require('react-dom')
 const { deoptigate } = require('../')
+const { urlFromState, stateFromUrl } = require('./lib/query-state')
 
 const { ToolbarView } = require('./components/toolbar')
 const { FilesView } = require('./components/files')
+const { SummaryView } = require('./components/summary')
 const { FileDetailsView } = require('./components/file-details')
 
 const FILES_TAB_IDX = 0
@@ -751,24 +822,37 @@ function app() {
   return el
 }
 
+const initialState = {
+    selectedFile: null
+  , selectedLocation: null
+  , selectedSummaryTabIdx: SummaryView.OPT_TAB_IDX
+  , includeAllSeverities: false
+  , highlightCode: true
+  , selectedTabIdx: FILES_TAB_IDX
+}
+
 class MainView extends Component {
   constructor(props) {
     super(props)
-    this.state = {
-        selectedFile: null
-      , selectedLocation: 2
-      , includeAllSeverities: false
-      , highlightCode: true
-      , selectedTabIdx: FILES_TAB_IDX
-    }
+
+    const { groups } = props
+    this._indexedGroups = Array.from(groups)
+
+    this._initialState = Object.assign(initialState, this._stateFromUrl())
+    this.state = Object.assign({}, this._initialState)
+
     this._bind()
+    window.onpopstate = this._restoreStateFromHistory
   }
 
   _bind() {
     this._onlocationSelected = this._onlocationSelected.bind(this)
+    this._onsummaryTabIdxChanged = this._onsummaryTabIdxChanged.bind(this)
     this._onincludeAllSeveritiesChanged = this._onincludeAllSeveritiesChanged.bind(this)
     this._onhighlightCodeChanged = this._onhighlightCodeChanged.bind(this)
     this._onfileClicked = this._onfileClicked.bind(this)
+    this._updateUrl = this._updateUrl.bind(this)
+    this._restoreStateFromHistory = this._restoreStateFromHistory.bind(this)
   }
 
   render() {
@@ -797,7 +881,7 @@ class MainView extends Component {
     const selected = idx === selectedTabIdx
     const baseClass = 'flex flex-column ttu dib link pa3 bt outline-0 tab-header'
     const selectedClass = 'b--blue blue'
-    const unselectedClass = 'black b--white'
+    const unselectedClass = 'white b--white'
     const className = selected ? `${baseClass} ${selectedClass}` : `${baseClass} ${unselectedClass}`
 
     return React.createElement( 'a', { className: className, href: '#', onClick: () => this._ontabHeaderClicked(idx) }, label)
@@ -832,7 +916,13 @@ class MainView extends Component {
 
   _renderFileDetails(selected) {
     const { groups } = this.props
-    const { selectedFile, selectedLocation, includeAllSeverities, highlightCode } = this.state
+    const {
+        selectedFile
+      , selectedLocation
+      , selectedSummaryTabIdx
+      , includeAllSeverities
+      , highlightCode
+    } = this.state
     const display = selected ? 'flex' : 'dn'
     const className = `${display} flex-row w-100 ma2`
     if (selectedFile == null || !groups.has(selectedFile)) {
@@ -843,36 +933,131 @@ class MainView extends Component {
 
     return (
       React.createElement( FileDetailsView, {
-        groups: groups, selectedFile: selectedFile, selectedLocation: selectedLocation, includeAllSeverities: includeAllSeverities, highlightCode: highlightCode, className: className, onmarkerClicked: this._onlocationSelected, onsummaryClicked: this._onlocationSelected })
+        groups: groups, selectedFile: selectedFile, selectedLocation: selectedLocation, selectedSummaryTabIdx: selectedSummaryTabIdx, includeAllSeverities: includeAllSeverities, highlightCode: highlightCode, className: className, onmarkerClicked: this._onlocationSelected, onsummaryClicked: this._onlocationSelected, onsummaryTabIdxChanged: this._onsummaryTabIdxChanged })
     )
+  }
+
+  /*
+   * URL State
+   */
+  _indexFromFile(file) {
+    for (var i = 0; i < this._indexedGroups.length; i++) {
+      const key = this._indexedGroups[i][0]
+      if (key === file) { return i }
+    }
+    return -1
+  }
+
+  _fileFromIndex(idx) {
+    if (idx < 0) { return null }
+    if (this._indexedGroups[idx] == null) { return null }
+    return this._indexedGroups[idx][0]
+  }
+
+  _updateUrl() {
+    const {
+        selectedFile
+      , selectedLocation
+      , includeAllSeverities
+      , highlightCode
+      , selectedTabIdx
+      , selectedSummaryTabIdx
+    } = this.state
+
+    const state = {
+        selectedFileIdx: this._indexFromFile(selectedFile)
+      , selectedLocation
+      , includeAllSeverities
+      , highlightCode
+      , selectedTabIdx
+      , selectedSummaryTabIdx
+    }
+    try {
+      history.pushState(state, 'deoptigate', urlFromState(state))
+    } catch (e) {
+      // some browsers like Safari block this in the name of security
+      // if we opened the index file directly, i.e. the page isn't served
+    }
+  }
+
+  _restoreStateFromHistory(e) {
+    if (history.state == null) { return null }
+
+    let {
+        selectedFileIdx
+      , selectedLocation
+      , includeAllSeverities
+      , highlightCode
+      , selectedTabIdx
+      , selectedSummaryTabIdx
+    } = history.state
+    if (selectedLocation === '') { selectedLocation = null }
+
+    const selectedFile = this._fileFromIndex(selectedFileIdx)
+    const override = {
+        includeAllSeverities
+      , highlightCode
+      , selectedFile
+      , selectedTabIdx
+      , selectedLocation
+      , selectedSummaryTabIdx
+    }
+
+    this.setState(Object.assign(this.state, override))
+  }
+
+  _stateFromUrl() {
+    const state = stateFromUrl()
+    if (state == null) { return null }
+    const {
+        selectedFileIdx
+      , selectedLocation
+      , includeAllSeverities
+      , highlightCode
+      , selectedTabIdx
+      , selectedSummaryTabIdx
+    } = state
+    const selectedFile = this._fileFromIndex(selectedFileIdx)
+    return {
+        selectedFile
+      , selectedLocation
+      , includeAllSeverities
+      , highlightCode
+      , selectedTabIdx
+      , selectedSummaryTabIdx
+    }
   }
 
   /*
    * Events
    */
   _ontabHeaderClicked(idx) {
-    this.setState(Object.assign(this.state, { selectedTabIdx: idx }))
+    this.setState(Object.assign(this.state, { selectedTabIdx: idx }), this._updateUrl)
   }
 
   _onlocationSelected(id) {
-    this.setState(Object.assign(this.state, { selectedLocation: id }))
+    this.setState(Object.assign(this.state, { selectedLocation: id }), this._updateUrl)
+  }
+
+  _onsummaryTabIdxChanged(idx) {
+    this.setState(Object.assign(this.state, { selectedSummaryTabIdx: idx }), this._updateUrl)
   }
 
   _onincludeAllSeveritiesChanged(includeAllSeverities) {
-    this.setState(Object.assign(this.state, { includeAllSeverities, selectedLocation: null }))
+    this.setState(Object.assign(this.state, { includeAllSeverities, selectedLocation: null }), this._updateUrl)
   }
 
   _onhighlightCodeChanged(highlightCode) {
-    this.setState(Object.assign(this.state, { highlightCode }))
+    this.setState(Object.assign(this.state, { highlightCode }), this._updateUrl)
   }
 
   _onfileClicked(file) {
     this.setState(Object.assign(this.state, {
         selectedFile: file
       , selectedLocation: null
-      // auto open details view when file is sected
+      // auto open details view when file is selected
       , selectedTabIdx: DETAILS_TAB_IDX
-    }))
+    }), this._updateUrl)
   }
 }
 
@@ -891,7 +1076,7 @@ async function deoptigateRender(groupedByFile) {
 
 module.exports = deoptigateRender
 
-},{"../":51,"./components/file-details":2,"./components/files":3,"./components/toolbar":5,"react":40,"react-dom":20}],7:[function(require,module,exports){
+},{"../":57,"./components/file-details":2,"./components/files":3,"./components/summary":4,"./components/toolbar":5,"./lib/query-state":6,"react":46,"react-dom":26}],8:[function(require,module,exports){
 (function (global){
 'use strict';
 
@@ -1385,7 +1570,7 @@ var objectKeys = Object.keys || function (obj) {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"util/":10}],8:[function(require,module,exports){
+},{"util/":11}],9:[function(require,module,exports){
 if (typeof Object.create === 'function') {
   // implementation from standard node.js 'util' module
   module.exports = function inherits(ctor, superCtor) {
@@ -1410,14 +1595,14 @@ if (typeof Object.create === 'function') {
   }
 }
 
-},{}],9:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 module.exports = function isBuffer(arg) {
   return arg && typeof arg === 'object'
     && typeof arg.copy === 'function'
     && typeof arg.fill === 'function'
     && typeof arg.readUInt8 === 'function';
 }
-},{}],10:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 (function (process,global){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -2007,7 +2192,7 @@ function hasOwnProperty(obj, prop) {
 }
 
 }).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./support/isBuffer":9,"_process":12,"inherits":8}],11:[function(require,module,exports){
+},{"./support/isBuffer":10,"_process":13,"inherits":9}],12:[function(require,module,exports){
 (function (process){
 // .dirname, .basename, and .extname methods are extracted from Node.js v8.11.1,
 // backported and transplited with Babel, with backwards-compat fixes
@@ -2313,7 +2498,7 @@ var substr = 'ab'.substr(-1) === 'b'
 ;
 
 }).call(this,require('_process'))
-},{"_process":12}],12:[function(require,module,exports){
+},{"_process":13}],13:[function(require,module,exports){
 // shim for using process in browser
 var process = module.exports = {};
 
@@ -2499,7 +2684,7 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}],13:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 (function webpackUniversalModuleDefinition(root, factory) {
 /* istanbul ignore next */
 	if(typeof exports === 'object' && typeof module === 'object')
@@ -9209,7 +9394,7 @@ return /******/ (function(modules) { // webpackBootstrap
 /******/ ])
 });
 ;
-},{}],14:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
 ;(function() {
 'use strict'
 /* global define */
@@ -9524,7 +9709,7 @@ function bootstrap(esprima, exportFn) {
 }
 })()
 
-},{"esprima":13}],15:[function(require,module,exports){
+},{"esprima":14}],16:[function(require,module,exports){
 (function (__dirname){
 'use strict'
 
@@ -9668,7 +9853,7 @@ module.exports = {
 }
 
 }).call(this,"/node_modules/peacock")
-},{"./spans":16,"./themes/default":17,"path":11,"redeyed":14}],16:[function(require,module,exports){
+},{"./spans":17,"./themes/default":18,"path":12,"redeyed":15}],17:[function(require,module,exports){
 'use strict'
 
 var classes = {
@@ -9753,7 +9938,7 @@ Object.keys(classes)
 module.exports = spans
 module.exports.classes = classes
 
-},{}],17:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 var spans = require('../spans')
 
 module.exports = {
@@ -9944,7 +10129,643 @@ module.exports = {
   , _default: undefined
 }
 
-},{"../spans":16}],18:[function(require,module,exports){
+},{"../spans":17}],19:[function(require,module,exports){
+'use strict';
+
+var replace = String.prototype.replace;
+var percentTwenties = /%20/g;
+
+module.exports = {
+    'default': 'RFC3986',
+    formatters: {
+        RFC1738: function (value) {
+            return replace.call(value, percentTwenties, '+');
+        },
+        RFC3986: function (value) {
+            return value;
+        }
+    },
+    RFC1738: 'RFC1738',
+    RFC3986: 'RFC3986'
+};
+
+},{}],20:[function(require,module,exports){
+'use strict';
+
+var stringify = require('./stringify');
+var parse = require('./parse');
+var formats = require('./formats');
+
+module.exports = {
+    formats: formats,
+    parse: parse,
+    stringify: stringify
+};
+
+},{"./formats":19,"./parse":21,"./stringify":22}],21:[function(require,module,exports){
+'use strict';
+
+var utils = require('./utils');
+
+var has = Object.prototype.hasOwnProperty;
+
+var defaults = {
+    allowDots: false,
+    allowPrototypes: false,
+    arrayLimit: 20,
+    decoder: utils.decode,
+    delimiter: '&',
+    depth: 5,
+    parameterLimit: 1000,
+    plainObjects: false,
+    strictNullHandling: false
+};
+
+var parseValues = function parseQueryStringValues(str, options) {
+    var obj = {};
+    var cleanStr = options.ignoreQueryPrefix ? str.replace(/^\?/, '') : str;
+    var limit = options.parameterLimit === Infinity ? undefined : options.parameterLimit;
+    var parts = cleanStr.split(options.delimiter, limit);
+
+    for (var i = 0; i < parts.length; ++i) {
+        var part = parts[i];
+
+        var bracketEqualsPos = part.indexOf(']=');
+        var pos = bracketEqualsPos === -1 ? part.indexOf('=') : bracketEqualsPos + 1;
+
+        var key, val;
+        if (pos === -1) {
+            key = options.decoder(part, defaults.decoder);
+            val = options.strictNullHandling ? null : '';
+        } else {
+            key = options.decoder(part.slice(0, pos), defaults.decoder);
+            val = options.decoder(part.slice(pos + 1), defaults.decoder);
+        }
+        if (has.call(obj, key)) {
+            obj[key] = [].concat(obj[key]).concat(val);
+        } else {
+            obj[key] = val;
+        }
+    }
+
+    return obj;
+};
+
+var parseObject = function (chain, val, options) {
+    var leaf = val;
+
+    for (var i = chain.length - 1; i >= 0; --i) {
+        var obj;
+        var root = chain[i];
+
+        if (root === '[]') {
+            obj = [];
+            obj = obj.concat(leaf);
+        } else {
+            obj = options.plainObjects ? Object.create(null) : {};
+            var cleanRoot = root.charAt(0) === '[' && root.charAt(root.length - 1) === ']' ? root.slice(1, -1) : root;
+            var index = parseInt(cleanRoot, 10);
+            if (
+                !isNaN(index)
+                && root !== cleanRoot
+                && String(index) === cleanRoot
+                && index >= 0
+                && (options.parseArrays && index <= options.arrayLimit)
+            ) {
+                obj = [];
+                obj[index] = leaf;
+            } else {
+                obj[cleanRoot] = leaf;
+            }
+        }
+
+        leaf = obj;
+    }
+
+    return leaf;
+};
+
+var parseKeys = function parseQueryStringKeys(givenKey, val, options) {
+    if (!givenKey) {
+        return;
+    }
+
+    // Transform dot notation to bracket notation
+    var key = options.allowDots ? givenKey.replace(/\.([^.[]+)/g, '[$1]') : givenKey;
+
+    // The regex chunks
+
+    var brackets = /(\[[^[\]]*])/;
+    var child = /(\[[^[\]]*])/g;
+
+    // Get the parent
+
+    var segment = brackets.exec(key);
+    var parent = segment ? key.slice(0, segment.index) : key;
+
+    // Stash the parent if it exists
+
+    var keys = [];
+    if (parent) {
+        // If we aren't using plain objects, optionally prefix keys
+        // that would overwrite object prototype properties
+        if (!options.plainObjects && has.call(Object.prototype, parent)) {
+            if (!options.allowPrototypes) {
+                return;
+            }
+        }
+
+        keys.push(parent);
+    }
+
+    // Loop through children appending to the array until we hit depth
+
+    var i = 0;
+    while ((segment = child.exec(key)) !== null && i < options.depth) {
+        i += 1;
+        if (!options.plainObjects && has.call(Object.prototype, segment[1].slice(1, -1))) {
+            if (!options.allowPrototypes) {
+                return;
+            }
+        }
+        keys.push(segment[1]);
+    }
+
+    // If there's a remainder, just add whatever is left
+
+    if (segment) {
+        keys.push('[' + key.slice(segment.index) + ']');
+    }
+
+    return parseObject(keys, val, options);
+};
+
+module.exports = function (str, opts) {
+    var options = opts ? utils.assign({}, opts) : {};
+
+    if (options.decoder !== null && options.decoder !== undefined && typeof options.decoder !== 'function') {
+        throw new TypeError('Decoder has to be a function.');
+    }
+
+    options.ignoreQueryPrefix = options.ignoreQueryPrefix === true;
+    options.delimiter = typeof options.delimiter === 'string' || utils.isRegExp(options.delimiter) ? options.delimiter : defaults.delimiter;
+    options.depth = typeof options.depth === 'number' ? options.depth : defaults.depth;
+    options.arrayLimit = typeof options.arrayLimit === 'number' ? options.arrayLimit : defaults.arrayLimit;
+    options.parseArrays = options.parseArrays !== false;
+    options.decoder = typeof options.decoder === 'function' ? options.decoder : defaults.decoder;
+    options.allowDots = typeof options.allowDots === 'boolean' ? options.allowDots : defaults.allowDots;
+    options.plainObjects = typeof options.plainObjects === 'boolean' ? options.plainObjects : defaults.plainObjects;
+    options.allowPrototypes = typeof options.allowPrototypes === 'boolean' ? options.allowPrototypes : defaults.allowPrototypes;
+    options.parameterLimit = typeof options.parameterLimit === 'number' ? options.parameterLimit : defaults.parameterLimit;
+    options.strictNullHandling = typeof options.strictNullHandling === 'boolean' ? options.strictNullHandling : defaults.strictNullHandling;
+
+    if (str === '' || str === null || typeof str === 'undefined') {
+        return options.plainObjects ? Object.create(null) : {};
+    }
+
+    var tempObj = typeof str === 'string' ? parseValues(str, options) : str;
+    var obj = options.plainObjects ? Object.create(null) : {};
+
+    // Iterate over the keys and setup the new object
+
+    var keys = Object.keys(tempObj);
+    for (var i = 0; i < keys.length; ++i) {
+        var key = keys[i];
+        var newObj = parseKeys(key, tempObj[key], options);
+        obj = utils.merge(obj, newObj, options);
+    }
+
+    return utils.compact(obj);
+};
+
+},{"./utils":23}],22:[function(require,module,exports){
+'use strict';
+
+var utils = require('./utils');
+var formats = require('./formats');
+
+var arrayPrefixGenerators = {
+    brackets: function brackets(prefix) { // eslint-disable-line func-name-matching
+        return prefix + '[]';
+    },
+    indices: function indices(prefix, key) { // eslint-disable-line func-name-matching
+        return prefix + '[' + key + ']';
+    },
+    repeat: function repeat(prefix) { // eslint-disable-line func-name-matching
+        return prefix;
+    }
+};
+
+var toISO = Date.prototype.toISOString;
+
+var defaults = {
+    delimiter: '&',
+    encode: true,
+    encoder: utils.encode,
+    encodeValuesOnly: false,
+    serializeDate: function serializeDate(date) { // eslint-disable-line func-name-matching
+        return toISO.call(date);
+    },
+    skipNulls: false,
+    strictNullHandling: false
+};
+
+var stringify = function stringify( // eslint-disable-line func-name-matching
+    object,
+    prefix,
+    generateArrayPrefix,
+    strictNullHandling,
+    skipNulls,
+    encoder,
+    filter,
+    sort,
+    allowDots,
+    serializeDate,
+    formatter,
+    encodeValuesOnly
+) {
+    var obj = object;
+    if (typeof filter === 'function') {
+        obj = filter(prefix, obj);
+    } else if (obj instanceof Date) {
+        obj = serializeDate(obj);
+    } else if (obj === null) {
+        if (strictNullHandling) {
+            return encoder && !encodeValuesOnly ? encoder(prefix, defaults.encoder) : prefix;
+        }
+
+        obj = '';
+    }
+
+    if (typeof obj === 'string' || typeof obj === 'number' || typeof obj === 'boolean' || utils.isBuffer(obj)) {
+        if (encoder) {
+            var keyValue = encodeValuesOnly ? prefix : encoder(prefix, defaults.encoder);
+            return [formatter(keyValue) + '=' + formatter(encoder(obj, defaults.encoder))];
+        }
+        return [formatter(prefix) + '=' + formatter(String(obj))];
+    }
+
+    var values = [];
+
+    if (typeof obj === 'undefined') {
+        return values;
+    }
+
+    var objKeys;
+    if (Array.isArray(filter)) {
+        objKeys = filter;
+    } else {
+        var keys = Object.keys(obj);
+        objKeys = sort ? keys.sort(sort) : keys;
+    }
+
+    for (var i = 0; i < objKeys.length; ++i) {
+        var key = objKeys[i];
+
+        if (skipNulls && obj[key] === null) {
+            continue;
+        }
+
+        if (Array.isArray(obj)) {
+            values = values.concat(stringify(
+                obj[key],
+                generateArrayPrefix(prefix, key),
+                generateArrayPrefix,
+                strictNullHandling,
+                skipNulls,
+                encoder,
+                filter,
+                sort,
+                allowDots,
+                serializeDate,
+                formatter,
+                encodeValuesOnly
+            ));
+        } else {
+            values = values.concat(stringify(
+                obj[key],
+                prefix + (allowDots ? '.' + key : '[' + key + ']'),
+                generateArrayPrefix,
+                strictNullHandling,
+                skipNulls,
+                encoder,
+                filter,
+                sort,
+                allowDots,
+                serializeDate,
+                formatter,
+                encodeValuesOnly
+            ));
+        }
+    }
+
+    return values;
+};
+
+module.exports = function (object, opts) {
+    var obj = object;
+    var options = opts ? utils.assign({}, opts) : {};
+
+    if (options.encoder !== null && options.encoder !== undefined && typeof options.encoder !== 'function') {
+        throw new TypeError('Encoder has to be a function.');
+    }
+
+    var delimiter = typeof options.delimiter === 'undefined' ? defaults.delimiter : options.delimiter;
+    var strictNullHandling = typeof options.strictNullHandling === 'boolean' ? options.strictNullHandling : defaults.strictNullHandling;
+    var skipNulls = typeof options.skipNulls === 'boolean' ? options.skipNulls : defaults.skipNulls;
+    var encode = typeof options.encode === 'boolean' ? options.encode : defaults.encode;
+    var encoder = typeof options.encoder === 'function' ? options.encoder : defaults.encoder;
+    var sort = typeof options.sort === 'function' ? options.sort : null;
+    var allowDots = typeof options.allowDots === 'undefined' ? false : options.allowDots;
+    var serializeDate = typeof options.serializeDate === 'function' ? options.serializeDate : defaults.serializeDate;
+    var encodeValuesOnly = typeof options.encodeValuesOnly === 'boolean' ? options.encodeValuesOnly : defaults.encodeValuesOnly;
+    if (typeof options.format === 'undefined') {
+        options.format = formats['default'];
+    } else if (!Object.prototype.hasOwnProperty.call(formats.formatters, options.format)) {
+        throw new TypeError('Unknown format option provided.');
+    }
+    var formatter = formats.formatters[options.format];
+    var objKeys;
+    var filter;
+
+    if (typeof options.filter === 'function') {
+        filter = options.filter;
+        obj = filter('', obj);
+    } else if (Array.isArray(options.filter)) {
+        filter = options.filter;
+        objKeys = filter;
+    }
+
+    var keys = [];
+
+    if (typeof obj !== 'object' || obj === null) {
+        return '';
+    }
+
+    var arrayFormat;
+    if (options.arrayFormat in arrayPrefixGenerators) {
+        arrayFormat = options.arrayFormat;
+    } else if ('indices' in options) {
+        arrayFormat = options.indices ? 'indices' : 'repeat';
+    } else {
+        arrayFormat = 'indices';
+    }
+
+    var generateArrayPrefix = arrayPrefixGenerators[arrayFormat];
+
+    if (!objKeys) {
+        objKeys = Object.keys(obj);
+    }
+
+    if (sort) {
+        objKeys.sort(sort);
+    }
+
+    for (var i = 0; i < objKeys.length; ++i) {
+        var key = objKeys[i];
+
+        if (skipNulls && obj[key] === null) {
+            continue;
+        }
+
+        keys = keys.concat(stringify(
+            obj[key],
+            key,
+            generateArrayPrefix,
+            strictNullHandling,
+            skipNulls,
+            encode ? encoder : null,
+            filter,
+            sort,
+            allowDots,
+            serializeDate,
+            formatter,
+            encodeValuesOnly
+        ));
+    }
+
+    var joined = keys.join(delimiter);
+    var prefix = options.addQueryPrefix === true ? '?' : '';
+
+    return joined.length > 0 ? prefix + joined : '';
+};
+
+},{"./formats":19,"./utils":23}],23:[function(require,module,exports){
+'use strict';
+
+var has = Object.prototype.hasOwnProperty;
+
+var hexTable = (function () {
+    var array = [];
+    for (var i = 0; i < 256; ++i) {
+        array.push('%' + ((i < 16 ? '0' : '') + i.toString(16)).toUpperCase());
+    }
+
+    return array;
+}());
+
+var compactQueue = function compactQueue(queue) {
+    var obj;
+
+    while (queue.length) {
+        var item = queue.pop();
+        obj = item.obj[item.prop];
+
+        if (Array.isArray(obj)) {
+            var compacted = [];
+
+            for (var j = 0; j < obj.length; ++j) {
+                if (typeof obj[j] !== 'undefined') {
+                    compacted.push(obj[j]);
+                }
+            }
+
+            item.obj[item.prop] = compacted;
+        }
+    }
+
+    return obj;
+};
+
+var arrayToObject = function arrayToObject(source, options) {
+    var obj = options && options.plainObjects ? Object.create(null) : {};
+    for (var i = 0; i < source.length; ++i) {
+        if (typeof source[i] !== 'undefined') {
+            obj[i] = source[i];
+        }
+    }
+
+    return obj;
+};
+
+var merge = function merge(target, source, options) {
+    if (!source) {
+        return target;
+    }
+
+    if (typeof source !== 'object') {
+        if (Array.isArray(target)) {
+            target.push(source);
+        } else if (typeof target === 'object') {
+            if (options.plainObjects || options.allowPrototypes || !has.call(Object.prototype, source)) {
+                target[source] = true;
+            }
+        } else {
+            return [target, source];
+        }
+
+        return target;
+    }
+
+    if (typeof target !== 'object') {
+        return [target].concat(source);
+    }
+
+    var mergeTarget = target;
+    if (Array.isArray(target) && !Array.isArray(source)) {
+        mergeTarget = arrayToObject(target, options);
+    }
+
+    if (Array.isArray(target) && Array.isArray(source)) {
+        source.forEach(function (item, i) {
+            if (has.call(target, i)) {
+                if (target[i] && typeof target[i] === 'object') {
+                    target[i] = merge(target[i], item, options);
+                } else {
+                    target.push(item);
+                }
+            } else {
+                target[i] = item;
+            }
+        });
+        return target;
+    }
+
+    return Object.keys(source).reduce(function (acc, key) {
+        var value = source[key];
+
+        if (has.call(acc, key)) {
+            acc[key] = merge(acc[key], value, options);
+        } else {
+            acc[key] = value;
+        }
+        return acc;
+    }, mergeTarget);
+};
+
+var assign = function assignSingleSource(target, source) {
+    return Object.keys(source).reduce(function (acc, key) {
+        acc[key] = source[key];
+        return acc;
+    }, target);
+};
+
+var decode = function (str) {
+    try {
+        return decodeURIComponent(str.replace(/\+/g, ' '));
+    } catch (e) {
+        return str;
+    }
+};
+
+var encode = function encode(str) {
+    // This code was originally written by Brian White (mscdex) for the io.js core querystring library.
+    // It has been adapted here for stricter adherence to RFC 3986
+    if (str.length === 0) {
+        return str;
+    }
+
+    var string = typeof str === 'string' ? str : String(str);
+
+    var out = '';
+    for (var i = 0; i < string.length; ++i) {
+        var c = string.charCodeAt(i);
+
+        if (
+            c === 0x2D // -
+            || c === 0x2E // .
+            || c === 0x5F // _
+            || c === 0x7E // ~
+            || (c >= 0x30 && c <= 0x39) // 0-9
+            || (c >= 0x41 && c <= 0x5A) // a-z
+            || (c >= 0x61 && c <= 0x7A) // A-Z
+        ) {
+            out += string.charAt(i);
+            continue;
+        }
+
+        if (c < 0x80) {
+            out = out + hexTable[c];
+            continue;
+        }
+
+        if (c < 0x800) {
+            out = out + (hexTable[0xC0 | (c >> 6)] + hexTable[0x80 | (c & 0x3F)]);
+            continue;
+        }
+
+        if (c < 0xD800 || c >= 0xE000) {
+            out = out + (hexTable[0xE0 | (c >> 12)] + hexTable[0x80 | ((c >> 6) & 0x3F)] + hexTable[0x80 | (c & 0x3F)]);
+            continue;
+        }
+
+        i += 1;
+        c = 0x10000 + (((c & 0x3FF) << 10) | (string.charCodeAt(i) & 0x3FF));
+        out += hexTable[0xF0 | (c >> 18)]
+            + hexTable[0x80 | ((c >> 12) & 0x3F)]
+            + hexTable[0x80 | ((c >> 6) & 0x3F)]
+            + hexTable[0x80 | (c & 0x3F)];
+    }
+
+    return out;
+};
+
+var compact = function compact(value) {
+    var queue = [{ obj: { o: value }, prop: 'o' }];
+    var refs = [];
+
+    for (var i = 0; i < queue.length; ++i) {
+        var item = queue[i];
+        var obj = item.obj[item.prop];
+
+        var keys = Object.keys(obj);
+        for (var j = 0; j < keys.length; ++j) {
+            var key = keys[j];
+            var val = obj[key];
+            if (typeof val === 'object' && val !== null && refs.indexOf(val) === -1) {
+                queue.push({ obj: obj, prop: key });
+                refs.push(val);
+            }
+        }
+    }
+
+    return compactQueue(queue);
+};
+
+var isRegExp = function isRegExp(obj) {
+    return Object.prototype.toString.call(obj) === '[object RegExp]';
+};
+
+var isBuffer = function isBuffer(obj) {
+    if (obj === null || typeof obj === 'undefined') {
+        return false;
+    }
+
+    return !!(obj.constructor && obj.constructor.isBuffer && obj.constructor.isBuffer(obj));
+};
+
+module.exports = {
+    arrayToObject: arrayToObject,
+    assign: assign,
+    compact: compact,
+    decode: decode,
+    encode: encode,
+    isBuffer: isBuffer,
+    isRegExp: isRegExp,
+    merge: merge
+};
+
+},{}],24:[function(require,module,exports){
 (function (process){
 /** @license React v16.3.3
  * react-dom.development.js
@@ -26602,7 +27423,7 @@ module.exports = reactDom;
 }
 
 }).call(this,require('_process'))
-},{"_process":12,"fbjs/lib/ExecutionEnvironment":21,"fbjs/lib/camelizeStyleName":23,"fbjs/lib/containsNode":24,"fbjs/lib/emptyFunction":25,"fbjs/lib/emptyObject":26,"fbjs/lib/getActiveElement":27,"fbjs/lib/hyphenateStyleName":29,"fbjs/lib/invariant":30,"fbjs/lib/shallowEqual":33,"fbjs/lib/warning":34,"object-assign":35,"prop-types/checkPropTypes":36,"react":40}],19:[function(require,module,exports){
+},{"_process":13,"fbjs/lib/ExecutionEnvironment":27,"fbjs/lib/camelizeStyleName":29,"fbjs/lib/containsNode":30,"fbjs/lib/emptyFunction":31,"fbjs/lib/emptyObject":32,"fbjs/lib/getActiveElement":33,"fbjs/lib/hyphenateStyleName":35,"fbjs/lib/invariant":36,"fbjs/lib/shallowEqual":39,"fbjs/lib/warning":40,"object-assign":41,"prop-types/checkPropTypes":42,"react":46}],25:[function(require,module,exports){
 /** @license React v16.3.3
  * react-dom.production.min.js
  *
@@ -26850,7 +27671,7 @@ var Gg={createPortal:Fg,findDOMNode:function(a){return null==a?null:1===a.nodeTy
 null})}),!0):!1},unstable_createPortal:function(){return Fg.apply(void 0,arguments)},unstable_batchedUpdates:X.batchedUpdates,unstable_deferredUpdates:X.deferredUpdates,flushSync:X.flushSync,unstable_flushControlled:X.flushControlled,__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED:{EventPluginHub:Ra,EventPluginRegistry:Ca,EventPropagators:kb,ReactControlledComponent:$b,ReactDOMComponentTree:bb,ReactDOMEventListener:$d},unstable_createRoot:function(a,b){return new tg(a,!0,null!=b&&!0===b.hydrate)}};
 X.injectIntoDevTools({findFiberByHostInstance:Ua,bundleType:0,version:"16.3.3",rendererPackageName:"react-dom"});var Hg=Object.freeze({default:Gg}),Ig=Hg&&Gg||Hg;module.exports=Ig["default"]?Ig["default"]:Ig;
 
-},{"fbjs/lib/ExecutionEnvironment":21,"fbjs/lib/containsNode":24,"fbjs/lib/emptyFunction":25,"fbjs/lib/emptyObject":26,"fbjs/lib/getActiveElement":27,"fbjs/lib/invariant":30,"fbjs/lib/shallowEqual":33,"object-assign":35,"react":40}],20:[function(require,module,exports){
+},{"fbjs/lib/ExecutionEnvironment":27,"fbjs/lib/containsNode":30,"fbjs/lib/emptyFunction":31,"fbjs/lib/emptyObject":32,"fbjs/lib/getActiveElement":33,"fbjs/lib/invariant":36,"fbjs/lib/shallowEqual":39,"object-assign":41,"react":46}],26:[function(require,module,exports){
 (function (process){
 'use strict';
 
@@ -26892,7 +27713,7 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 }).call(this,require('_process'))
-},{"./cjs/react-dom.development.js":18,"./cjs/react-dom.production.min.js":19,"_process":12}],21:[function(require,module,exports){
+},{"./cjs/react-dom.development.js":24,"./cjs/react-dom.production.min.js":25,"_process":13}],27:[function(require,module,exports){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
  *
@@ -26926,7 +27747,7 @@ var ExecutionEnvironment = {
 };
 
 module.exports = ExecutionEnvironment;
-},{}],22:[function(require,module,exports){
+},{}],28:[function(require,module,exports){
 "use strict";
 
 /**
@@ -26956,7 +27777,7 @@ function camelize(string) {
 }
 
 module.exports = camelize;
-},{}],23:[function(require,module,exports){
+},{}],29:[function(require,module,exports){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
  *
@@ -26994,7 +27815,7 @@ function camelizeStyleName(string) {
 }
 
 module.exports = camelizeStyleName;
-},{"./camelize":22}],24:[function(require,module,exports){
+},{"./camelize":28}],30:[function(require,module,exports){
 'use strict';
 
 /**
@@ -27032,7 +27853,7 @@ function containsNode(outerNode, innerNode) {
 }
 
 module.exports = containsNode;
-},{"./isTextNode":32}],25:[function(require,module,exports){
+},{"./isTextNode":38}],31:[function(require,module,exports){
 "use strict";
 
 /**
@@ -27069,7 +27890,7 @@ emptyFunction.thatReturnsArgument = function (arg) {
 };
 
 module.exports = emptyFunction;
-},{}],26:[function(require,module,exports){
+},{}],32:[function(require,module,exports){
 (function (process){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
@@ -27089,7 +27910,7 @@ if (process.env.NODE_ENV !== 'production') {
 
 module.exports = emptyObject;
 }).call(this,require('_process'))
-},{"_process":12}],27:[function(require,module,exports){
+},{"_process":13}],33:[function(require,module,exports){
 'use strict';
 
 /**
@@ -27126,7 +27947,7 @@ function getActiveElement(doc) /*?DOMElement*/{
 }
 
 module.exports = getActiveElement;
-},{}],28:[function(require,module,exports){
+},{}],34:[function(require,module,exports){
 'use strict';
 
 /**
@@ -27157,7 +27978,7 @@ function hyphenate(string) {
 }
 
 module.exports = hyphenate;
-},{}],29:[function(require,module,exports){
+},{}],35:[function(require,module,exports){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
  *
@@ -27194,7 +28015,7 @@ function hyphenateStyleName(string) {
 }
 
 module.exports = hyphenateStyleName;
-},{"./hyphenate":28}],30:[function(require,module,exports){
+},{"./hyphenate":34}],36:[function(require,module,exports){
 (function (process){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
@@ -27250,7 +28071,7 @@ function invariant(condition, format, a, b, c, d, e, f) {
 
 module.exports = invariant;
 }).call(this,require('_process'))
-},{"_process":12}],31:[function(require,module,exports){
+},{"_process":13}],37:[function(require,module,exports){
 'use strict';
 
 /**
@@ -27273,7 +28094,7 @@ function isNode(object) {
 }
 
 module.exports = isNode;
-},{}],32:[function(require,module,exports){
+},{}],38:[function(require,module,exports){
 'use strict';
 
 /**
@@ -27296,7 +28117,7 @@ function isTextNode(object) {
 }
 
 module.exports = isTextNode;
-},{"./isNode":31}],33:[function(require,module,exports){
+},{"./isNode":37}],39:[function(require,module,exports){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
  *
@@ -27362,7 +28183,7 @@ function shallowEqual(objA, objB) {
 }
 
 module.exports = shallowEqual;
-},{}],34:[function(require,module,exports){
+},{}],40:[function(require,module,exports){
 (function (process){
 /**
  * Copyright (c) 2014-present, Facebook, Inc.
@@ -27427,7 +28248,7 @@ if (process.env.NODE_ENV !== 'production') {
 
 module.exports = warning;
 }).call(this,require('_process'))
-},{"./emptyFunction":25,"_process":12}],35:[function(require,module,exports){
+},{"./emptyFunction":31,"_process":13}],41:[function(require,module,exports){
 /*
 object-assign
 (c) Sindre Sorhus
@@ -27519,7 +28340,7 @@ module.exports = shouldUseNative() ? Object.assign : function (target, source) {
 	return to;
 };
 
-},{}],36:[function(require,module,exports){
+},{}],42:[function(require,module,exports){
 (function (process){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
@@ -27614,7 +28435,7 @@ function checkPropTypes(typeSpecs, values, location, componentName, getStack) {
 module.exports = checkPropTypes;
 
 }).call(this,require('_process'))
-},{"./lib/ReactPropTypesSecret":37,"_process":12}],37:[function(require,module,exports){
+},{"./lib/ReactPropTypesSecret":43,"_process":13}],43:[function(require,module,exports){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
  *
@@ -27628,7 +28449,7 @@ var ReactPropTypesSecret = 'SECRET_DO_NOT_PASS_THIS_OR_YOU_WILL_BE_FIRED';
 
 module.exports = ReactPropTypesSecret;
 
-},{}],38:[function(require,module,exports){
+},{}],44:[function(require,module,exports){
 (function (process){
 /** @license React v16.3.2
  * react.development.js
@@ -29046,7 +29867,7 @@ module.exports = react;
 }
 
 }).call(this,require('_process'))
-},{"_process":12,"fbjs/lib/emptyFunction":41,"fbjs/lib/emptyObject":42,"fbjs/lib/invariant":43,"fbjs/lib/warning":44,"object-assign":45,"prop-types/checkPropTypes":46}],39:[function(require,module,exports){
+},{"_process":13,"fbjs/lib/emptyFunction":47,"fbjs/lib/emptyObject":48,"fbjs/lib/invariant":49,"fbjs/lib/warning":50,"object-assign":51,"prop-types/checkPropTypes":52}],45:[function(require,module,exports){
 /** @license React v16.3.2
  * react.production.min.js
  *
@@ -29070,7 +29891,7 @@ _calculateChangedBits:b,_defaultValue:a,_currentValue:a,_changedBits:0,Provider:
 (k=a.type.defaultProps);for(c in b)J.call(b,c)&&!K.hasOwnProperty(c)&&(d[c]=void 0===b[c]&&void 0!==k?k[c]:b[c])}c=arguments.length-2;if(1===c)d.children=e;else if(1<c){k=Array(c);for(var l=0;l<c;l++)k[l]=arguments[l+2];d.children=k}return{$$typeof:t,type:a.type,key:g,ref:h,props:d,_owner:f}},createFactory:function(a){var b=L.bind(null,a);b.type=a;return b},isValidElement:M,version:"16.3.2",__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED:{ReactCurrentOwner:I,assign:m}},X=Object.freeze({default:W}),
 Y=X&&W||X;module.exports=Y["default"]?Y["default"]:Y;
 
-},{"fbjs/lib/emptyFunction":41,"fbjs/lib/emptyObject":42,"fbjs/lib/invariant":43,"object-assign":45}],40:[function(require,module,exports){
+},{"fbjs/lib/emptyFunction":47,"fbjs/lib/emptyObject":48,"fbjs/lib/invariant":49,"object-assign":51}],46:[function(require,module,exports){
 (function (process){
 'use strict';
 
@@ -29081,21 +29902,21 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 }).call(this,require('_process'))
-},{"./cjs/react.development.js":38,"./cjs/react.production.min.js":39,"_process":12}],41:[function(require,module,exports){
-arguments[4][25][0].apply(exports,arguments)
-},{"dup":25}],42:[function(require,module,exports){
-arguments[4][26][0].apply(exports,arguments)
-},{"_process":12,"dup":26}],43:[function(require,module,exports){
-arguments[4][30][0].apply(exports,arguments)
-},{"_process":12,"dup":30}],44:[function(require,module,exports){
-arguments[4][34][0].apply(exports,arguments)
-},{"./emptyFunction":41,"_process":12,"dup":34}],45:[function(require,module,exports){
-arguments[4][35][0].apply(exports,arguments)
-},{"dup":35}],46:[function(require,module,exports){
+},{"./cjs/react.development.js":44,"./cjs/react.production.min.js":45,"_process":13}],47:[function(require,module,exports){
+arguments[4][31][0].apply(exports,arguments)
+},{"dup":31}],48:[function(require,module,exports){
+arguments[4][32][0].apply(exports,arguments)
+},{"_process":13,"dup":32}],49:[function(require,module,exports){
 arguments[4][36][0].apply(exports,arguments)
-},{"./lib/ReactPropTypesSecret":47,"_process":12,"dup":36}],47:[function(require,module,exports){
-arguments[4][37][0].apply(exports,arguments)
-},{"dup":37}],48:[function(require,module,exports){
+},{"_process":13,"dup":36}],50:[function(require,module,exports){
+arguments[4][40][0].apply(exports,arguments)
+},{"./emptyFunction":47,"_process":13,"dup":40}],51:[function(require,module,exports){
+arguments[4][41][0].apply(exports,arguments)
+},{"dup":41}],52:[function(require,module,exports){
+arguments[4][42][0].apply(exports,arguments)
+},{"./lib/ReactPropTypesSecret":53,"_process":13,"dup":42}],53:[function(require,module,exports){
+arguments[4][43][0].apply(exports,arguments)
+},{"dup":43}],54:[function(require,module,exports){
 "use strict";
 
 exports.__esModule = true;
@@ -29163,7 +29984,7 @@ function scrollIntoView(target, options) {
 var _default = scrollIntoView;
 exports.default = _default;
 module.exports = exports.default;
-},{"compute-scroll-into-view":49}],49:[function(require,module,exports){
+},{"compute-scroll-into-view":55}],55:[function(require,module,exports){
 "use strict";
 
 exports.__esModule = true;
@@ -29347,7 +30168,7 @@ var _default = function _default(target, options) {
 
 exports.default = _default;
 module.exports = exports["default"];
-},{}],50:[function(require,module,exports){
+},{}],56:[function(require,module,exports){
 'use strict'
 
 const peacock = require('peacock')
@@ -29568,7 +30389,7 @@ class ThemeBrowser {
 
 module.exports = ThemeBrowser
 
-},{"peacock":15}],51:[function(require,module,exports){
+},{"peacock":16}],57:[function(require,module,exports){
 'use strict'
 
 /* eslint-disable camelcase */
@@ -29845,7 +30666,7 @@ module.exports = {
   , deoptigate
 }
 
-},{"./lib/grouping/group-by-file-and-location":52,"./lib/log-processing/code-entry":55,"./lib/log-processing/deopt-entry":56,"./lib/log-processing/ic-entry":57,"./lib/log-processing/optimization-state":59,"v8-tools-core/logreader":65,"v8-tools-core/profile":66}],52:[function(require,module,exports){
+},{"./lib/grouping/group-by-file-and-location":58,"./lib/log-processing/code-entry":61,"./lib/log-processing/deopt-entry":62,"./lib/log-processing/ic-entry":63,"./lib/log-processing/optimization-state":65,"v8-tools-core/logreader":71,"v8-tools-core/profile":72}],58:[function(require,module,exports){
 'use strict'
 
 const {
@@ -29939,7 +30760,7 @@ function groupByFileAndLocation(groupedByFile) {
 
 module.exports = groupByFileAndLocation
 
-},{"./location":53}],53:[function(require,module,exports){
+},{"./location":59}],59:[function(require,module,exports){
 'use strict'
 
 function keyLocation({ functionName, line, column }) {
@@ -29975,7 +30796,7 @@ module.exports = {
   , byLocationKey
 }
 
-},{}],54:[function(require,module,exports){
+},{}],60:[function(require,module,exports){
 'use strict'
 
 const { highestSeverity, lowestSeverity } = require('../severities')
@@ -30048,7 +30869,7 @@ function summarizeFile(ref) {
 
 module.exports = summarizeFile
 
-},{"../severities":62}],55:[function(require,module,exports){
+},{"../severities":68}],61:[function(require,module,exports){
 'use strict'
 
 const { severityOfOptimizationState }  = require('./optimization-state')
@@ -30089,7 +30910,7 @@ class CodeEntry {
 
 module.exports = CodeEntry
 
-},{"./optimization-state":59}],56:[function(require,module,exports){
+},{"./optimization-state":65}],62:[function(require,module,exports){
 'use strict'
 
 /* eslint-disable camelcase */
@@ -30175,7 +30996,7 @@ class DeoptEntry {
 
 module.exports = DeoptEntry
 
-},{"../severities":62}],57:[function(require,module,exports){
+},{"../severities":68}],63:[function(require,module,exports){
 'use strict'
 
 const {
@@ -30245,7 +31066,7 @@ class IcEntry {
 
 module.exports = IcEntry
 
-},{"./ic-state":58}],58:[function(require,module,exports){
+},{"./ic-state":64}],64:[function(require,module,exports){
 'use strict'
 
 const { MIN_SEVERITY } = require('../severities')
@@ -30303,7 +31124,7 @@ module.exports = {
   , severityIcState
 }
 
-},{"../severities":62}],59:[function(require,module,exports){
+},{"../severities":68}],65:[function(require,module,exports){
 'use strict'
 
 const { Profile } = require('v8-tools-core/profile')
@@ -30343,7 +31164,7 @@ module.exports = {
   , severityOfOptimizationState
 }
 
-},{"v8-tools-core/profile":66}],60:[function(require,module,exports){
+},{"v8-tools-core/profile":72}],66:[function(require,module,exports){
 'use strict'
 
 function getDigits(n) {
@@ -30428,7 +31249,7 @@ function markOnly(code, markerResolver) {
 
 module.exports = markOnly
 
-},{}],61:[function(require,module,exports){
+},{}],67:[function(require,module,exports){
 'use strict'
 
 const { severityColors, MIN_SEVERITY } = require('../severities')
@@ -30627,7 +31448,7 @@ class MarkerResolver {
 
 module.exports = MarkerResolver
 
-},{"../grouping/location":53,"../severities":62,"assert":7}],62:[function(require,module,exports){
+},{"../grouping/location":59,"../severities":68,"assert":8}],68:[function(require,module,exports){
 'use strict'
 
 const severityColors = [
@@ -30639,14 +31460,22 @@ const severityColors = [
 const MIN_SEVERITY = 1
 function highestSeverity(infos) {
   return infos.reduce(
-      (highest, { severity }) => severity > highest ? severity : highest
+      (highest, ref) => {
+        var severity = ref.severity;
+
+        return severity > highest ? severity : highest;
+  }
     , MIN_SEVERITY
   )
 }
 
 function lowestSeverity(infos) {
   return infos.reduce(
-      (lowest, { severity }) => severity < lowest ? severity : lowest
+      (lowest, ref) => {
+        var severity = ref.severity;
+
+        return severity < lowest ? severity : lowest;
+  }
     , 99
   )
 }
@@ -30658,7 +31487,7 @@ module.exports = {
   , lowestSeverity
 }
 
-},{}],63:[function(require,module,exports){
+},{}],69:[function(require,module,exports){
 // Copyright 2009 the V8 project authors. All rights reserved.
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
@@ -30985,7 +31814,7 @@ if (typeof module === 'object' && typeof module.exports === 'object') {
   module.exports = CodeMap;
 } 
 
-},{"./splaytree.js":67}],64:[function(require,module,exports){
+},{"./splaytree.js":73}],70:[function(require,module,exports){
 // Copyright 2009 the V8 project authors. All rights reserved.
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
@@ -31093,7 +31922,7 @@ if (typeof module === 'object' && typeof module.exports === 'object') {
   module.exports = CsvParser;
 } 
 
-},{}],65:[function(require,module,exports){
+},{}],71:[function(require,module,exports){
 // Copyright 2011 the V8 project authors. All rights reserved.
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
@@ -31335,7 +32164,7 @@ if (typeof module === 'object' && typeof module.exports === 'object') {
   module.exports = LogReader;
 } 
 
-},{"./csvparser.js":64}],66:[function(require,module,exports){
+},{"./csvparser.js":70}],72:[function(require,module,exports){
 // Copyright 2009 the V8 project authors. All rights reserved.
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
@@ -32469,7 +33298,7 @@ JsonProfile.prototype.writeJson = function() {
   write('}\n');
 };
 
-},{"./codemap.js":63}],67:[function(require,module,exports){
+},{"./codemap.js":69}],73:[function(require,module,exports){
 // Copyright 2009 the V8 project authors. All rights reserved.
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
@@ -32802,5 +33631,5 @@ if (typeof module === 'object' && typeof module.exports === 'object') {
   module.exports = SplayTree;
 } 
 
-},{}]},{},[6])(6)
+},{}]},{},[7])(7)
 });
