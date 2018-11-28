@@ -44,14 +44,14 @@ deoptigate app.js
   <tr>
     <td>
       <a href="https://nodesource.com/blog/why-the-new-v8-is-so-damn-fast">
-        Why the New V8 is so Damn Fast
+        <span>Why the New V8 is so Damn Fast</span>
         <img alt="damn-fast" src="assets/damn-fast.png">
       </a>
     </td>
     <td>
       <a href="https://nodesource.com/blog/tracking-down-performance-bottlenecks-nsolid-deoptigate">
-        Tracking Down and Fixing Performance Bottlenecks with N|Solid and Deoptigate <img alt="damn-fast"
-        src="assets/tracking-down.png">
+        <span>Tracking Down and Fixing Performance Bottlenecks with N|Solid and Deoptigate</span>
+        <img alt="damn-fast" src="assets/tracking-down.png">
       </a>
     </td>
   </tr>
