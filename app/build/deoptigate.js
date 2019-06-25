@@ -27824,7 +27824,7 @@ module.exports = camelizeStyleName;
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  *
- * 
+ *
  */
 
 var isTextNode = require('./isTextNode');
@@ -27862,7 +27862,7 @@ module.exports = containsNode;
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  *
- * 
+ *
  */
 
 function makeEmptyFunction(arg) {
@@ -28125,7 +28125,7 @@ module.exports = isTextNode;
  * LICENSE file in the root directory of this source tree.
  *
  * @typechecks
- * 
+ *
  */
 
 /*eslint-disable no-self-compare */
@@ -30875,8 +30875,17 @@ module.exports = summarizeFile
 const { severityOfOptimizationState }  = require('./optimization-state')
 
 function normalizeFile(file) {
-  // Node.js adds :line:column to the end
-  return file.split(':')[0]
+  // Web servers will have a prefix like: http://localhost:8000/app.js (needs to be just app.js)
+  // Files from Windows something like: file:///C:/temp/app.js (needs to be just /temp/app.js)
+  // Files from Linux something like: file:///home/bill/app.js (needs to be just /home/bill/app.js)
+  const webPrefix = /((https?:\/\/[^\/]*\/)|(file:\/\/\/[a-zA-Z]:)|(file:\/\/))/
+  file = file.replace(webPrefix, "")
+
+  // Location includes :line:column to the end
+  const re = /(.*):([0-9]+):([0-9]+)$/
+  const array = re.exec(file)
+  if (!array) return file
+  return array[1]
 }
 
 class CodeEntry {
@@ -30918,7 +30927,21 @@ module.exports = CodeEntry
 const { MIN_SEVERITY } = require('../severities')
 
 // <../examples/adders.js:93:27
-const sourcePositionRx = /[<]([^:]+):(\d+):(\d+)[>]/
+const sourcePositionRx = /[<](.*):([0-9]+):([0-9]+)[>]$/
+
+function normalizeFile(file) {
+  // Web servers will have a prefix like: http://localhost:8000/app.js (needs to be just app.js)
+  // Files from Windows something like: file:///C:/temp/app.js (needs to be just /temp/app.js)
+  // Files from Linux something like: file:///home/bill/app.js (needs to be just /home/bill/app.js)
+  const webPrefix = /((https?:\/\/[^\/]*\/)|(file:\/\/\/[a-zA-Z]:)|(file:\/\/))/
+  file = file.replace(webPrefix, "")
+
+  // Location includes :line:column to the end
+  const re = /(.*):([0-9]+):([0-9]+)$/
+  const array = re.exec(file)
+  if (!array) return file
+  return array[1]
+}
 
 function safeToInt(x) {
   if (x == null) return 0
@@ -30990,7 +31013,7 @@ class DeoptEntry {
   static disassembleSourcePosition(sourcePosition) {
     const m = sourcePositionRx.exec(sourcePosition)
     if (m == null) return { file: null, line: 0, column: 0 }
-    return { file: m[1], line: safeToInt(m[2]), column: safeToInt(m[3]) }
+    return { file: normalizeFile(m[1]), line: safeToInt(m[2]), column: safeToInt(m[3]) }
   }
 }
 
@@ -31005,8 +31028,17 @@ const {
 } = require('./ic-state')
 
 function normalizeFile(file) {
-  // Node.js adds :line:column to the end
-  return file.split(':')[0]
+  // Web servers will have a prefix like: http://localhost:8000/app.js (needs to be just app.js)
+  // Files from Windows something like: file:///C:/temp/app.js (needs to be just /temp/app.js)
+  // Files from Linux something like: file:///home/bill/app.js (needs to be just /home/bill/app.js)
+  const webPrefix = /((https?:\/\/[^\/]*\/)|(file:\/\/\/[a-zA-Z]:)|(file:\/\/))/
+  file = file.replace(webPrefix, "")
+
+  // Location includes :line:column to the end
+  const re = /(.*):([0-9]+):([0-9]+)$/
+  const array = re.exec(file)
+  if (!array) return file
+  return array[1]
 }
 
 function unquote(s) {
@@ -31812,7 +31844,7 @@ CodeMap.NameGenerator.prototype.getName = function(name) {
 if (typeof module === 'object' && typeof module.exports === 'object') {
   var SplayTree = require('./splaytree.js')
   module.exports = CodeMap;
-} 
+}
 
 },{"./splaytree.js":73}],70:[function(require,module,exports){
 // Copyright 2009 the V8 project authors. All rights reserved.
@@ -31920,7 +31952,7 @@ class CsvParser {
 
 if (typeof module === 'object' && typeof module.exports === 'object') {
   module.exports = CsvParser;
-} 
+}
 
 },{}],71:[function(require,module,exports){
 // Copyright 2011 the V8 project authors. All rights reserved.
@@ -32162,7 +32194,7 @@ LogReader.prototype.processLog_ = function(lines) {
 if (typeof module === 'object' && typeof module.exports === 'object') {
   var CsvParser = require('./csvparser.js')
   module.exports = LogReader;
-} 
+}
 
 },{"./csvparser.js":70}],72:[function(require,module,exports){
 // Copyright 2009 the V8 project authors. All rights reserved.
@@ -32199,7 +32231,7 @@ if (typeof module === 'object' && typeof module.exports === 'object') {
     CallTree,
     JsonProfile
   };
-} 
+}
 
 /**
  * Creates a profile object for processing profiling-related events
@@ -33629,7 +33661,7 @@ SplayTree.Node.prototype.right = null;
 
 if (typeof module === 'object' && typeof module.exports === 'object') {
   module.exports = SplayTree;
-} 
+}
 
 },{}]},{},[7])(7)
 });
