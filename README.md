@@ -87,23 +87,23 @@ Simply run `deoptigate` from the directory that contains the log file(s).
 ### To capture a browser session
 
 Launch a Chromium-based browser with the necessary tracing flags. For example,
-here running on localhost and writing the log file to the `/temp/trace` directory.
+running on localhost and writing the log file to the `/temp/trace` directory:
 
 ```
-%browser_exe% --no-sandbox --js-flags="--trace-ic --nologfile-per-isolate --logfile=/temp/trace/v8.log" http://localhost:8000/
+%browser% --no-sandbox --js-flags="--trace-ic --nologfile-per-isolate --logfile=/temp/trace/v8.log" http://localhost:8000/
 ```
 
 When running with no sandbox, you can also load pages directly from disk, e.g.
 
 ```
-%browser_exe% --no-sandbox --disable-extensions --js-flags="--trace-ic --nologfile-per-isolate --logfile=/temp/trace/v8.log" c:\temp\trace\default.html
+%browser% --no-sandbox --disable-extensions --js-flags="--trace-ic --nologfile-per-isolate --logfile=/temp/trace/v8.log" c:\temp\trace\default.html
 ```
 
 With the directory containing the log file as the current directory, run `deoptigate`.
 
 _Note: The JavaScript files to analyze must be laid out in the current directory
 as they are in the URL path. For example, if the browser loaded a file at
-`http://localhost:8000/js/app.js` above, then the file should exist at `/temp/tracing/js/app.js`.
+`http://localhost:8000/js/app.js` above, then the file should exist at `/temp/trace/js/app.js`.
 If the local copy does not exist, it will not appear in the analysis._
 
 ## License

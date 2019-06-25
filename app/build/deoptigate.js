@@ -27824,7 +27824,7 @@ module.exports = camelizeStyleName;
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  *
- *
+ * 
  */
 
 var isTextNode = require('./isTextNode');
@@ -27862,7 +27862,7 @@ module.exports = containsNode;
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  *
- *
+ * 
  */
 
 function makeEmptyFunction(arg) {
@@ -28125,7 +28125,7 @@ module.exports = isTextNode;
  * LICENSE file in the root directory of this source tree.
  *
  * @typechecks
- *
+ * 
  */
 
 /*eslint-disable no-self-compare */
@@ -30875,13 +30875,16 @@ module.exports = summarizeFile
 const { severityOfOptimizationState }  = require('./optimization-state')
 
 function normalizeFile(file) {
-  // Web servers will have a prefix like: http://localhost:8000/app.js (needs to be just app.js)
-  // Files from Windows something like: file:///C:/temp/app.js (needs to be just /temp/app.js)
-  // Files from Linux something like: file:///home/bill/app.js (needs to be just /home/bill/app.js)
+  // When tracing from the browser, additional filename formats need to be handled:
+  //  - Web servers will have a format like: http://localhost:8000/app.js (needs to be just app.js)
+  //  - Files from Windows something like: file:///C:/temp/app.js (needs to be just /temp/app.js)
+  //  - Files from Linux something like: file:///home/bill/app.js (needs to be just /home/bill/app.js)
   const webPrefix = /((https?:\/\/[^\/]*\/)|(file:\/\/\/[a-zA-Z]:)|(file:\/\/))/
   file = file.replace(webPrefix, "")
 
-  // Location includes :line:column to the end
+  // Location includes :line:column to the end. Note that browser traces include
+  // psuedo-filenames like "extensions::SafeBuiltins", so only consider the last
+  // two colons for a match.
   const re = /(.*):([0-9]+):([0-9]+)$/
   const array = re.exec(file)
   if (!array) return file
@@ -30926,17 +30929,23 @@ module.exports = CodeEntry
 
 const { MIN_SEVERITY } = require('../severities')
 
-// <../examples/adders.js:93:27
-const sourcePositionRx = /[<](.*):([0-9]+):([0-9]+)[>]$/
+// <../examples/adders.js:93:27 or <file:///C:/temp/trace/lib/app.js:20:12>
+// Note that the format may be something like the below, in which case the
+// first location shown is the better one to return.
+//    <lib/app.js:20:12> inlined at <lib/app.js:25:44>
+const sourcePositionRx = /[<]([^>]*):([0-9]+):([0-9]+)[>]/
 
 function normalizeFile(file) {
-  // Web servers will have a prefix like: http://localhost:8000/app.js (needs to be just app.js)
-  // Files from Windows something like: file:///C:/temp/app.js (needs to be just /temp/app.js)
-  // Files from Linux something like: file:///home/bill/app.js (needs to be just /home/bill/app.js)
+  // When tracing from the browser, additional filename formats need to be handled:
+  //  - Web servers will have a format like: http://localhost:8000/app.js (needs to be just app.js)
+  //  - Files from Windows something like: file:///C:/temp/app.js (needs to be just /temp/app.js)
+  //  - Files from Linux something like: file:///home/bill/app.js (needs to be just /home/bill/app.js)
   const webPrefix = /((https?:\/\/[^\/]*\/)|(file:\/\/\/[a-zA-Z]:)|(file:\/\/))/
   file = file.replace(webPrefix, "")
 
-  // Location includes :line:column to the end
+  // Location includes :line:column to the end. Note that browser traces include
+  // psuedo-filenames like "extensions::SafeBuiltins", so only consider the last
+  // two colons for a match.
   const re = /(.*):([0-9]+):([0-9]+)$/
   const array = re.exec(file)
   if (!array) return file
@@ -31028,13 +31037,16 @@ const {
 } = require('./ic-state')
 
 function normalizeFile(file) {
-  // Web servers will have a prefix like: http://localhost:8000/app.js (needs to be just app.js)
-  // Files from Windows something like: file:///C:/temp/app.js (needs to be just /temp/app.js)
-  // Files from Linux something like: file:///home/bill/app.js (needs to be just /home/bill/app.js)
+  // When tracing from the browser, additional filename formats need to be handled:
+  //  - Web servers will have a format like: http://localhost:8000/app.js (needs to be just app.js)
+  //  - Files from Windows something like: file:///C:/temp/app.js (needs to be just /temp/app.js)
+  //  - Files from Linux something like: file:///home/bill/app.js (needs to be just /home/bill/app.js)
   const webPrefix = /((https?:\/\/[^\/]*\/)|(file:\/\/\/[a-zA-Z]:)|(file:\/\/))/
   file = file.replace(webPrefix, "")
 
-  // Location includes :line:column to the end
+  // Location includes :line:column to the end. Note that browser traces include
+  // psuedo-filenames like "extensions::SafeBuiltins", so only consider the last
+  // two colons for a match.
   const re = /(.*):([0-9]+):([0-9]+)$/
   const array = re.exec(file)
   if (!array) return file
@@ -31844,7 +31856,7 @@ CodeMap.NameGenerator.prototype.getName = function(name) {
 if (typeof module === 'object' && typeof module.exports === 'object') {
   var SplayTree = require('./splaytree.js')
   module.exports = CodeMap;
-}
+} 
 
 },{"./splaytree.js":73}],70:[function(require,module,exports){
 // Copyright 2009 the V8 project authors. All rights reserved.
@@ -31952,7 +31964,7 @@ class CsvParser {
 
 if (typeof module === 'object' && typeof module.exports === 'object') {
   module.exports = CsvParser;
-}
+} 
 
 },{}],71:[function(require,module,exports){
 // Copyright 2011 the V8 project authors. All rights reserved.
@@ -32194,7 +32206,7 @@ LogReader.prototype.processLog_ = function(lines) {
 if (typeof module === 'object' && typeof module.exports === 'object') {
   var CsvParser = require('./csvparser.js')
   module.exports = LogReader;
-}
+} 
 
 },{"./csvparser.js":70}],72:[function(require,module,exports){
 // Copyright 2009 the V8 project authors. All rights reserved.
@@ -32231,7 +32243,7 @@ if (typeof module === 'object' && typeof module.exports === 'object') {
     CallTree,
     JsonProfile
   };
-}
+} 
 
 /**
  * Creates a profile object for processing profiling-related events
@@ -33661,7 +33673,7 @@ SplayTree.Node.prototype.right = null;
 
 if (typeof module === 'object' && typeof module.exports === 'object') {
   module.exports = SplayTree;
-}
+} 
 
 },{}]},{},[7])(7)
 });
