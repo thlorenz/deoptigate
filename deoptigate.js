@@ -8,6 +8,7 @@ const { Profile } = require('v8-tools-core/profile')
 const IcEntry = require('./lib/log-processing/ic-entry')
 const DeoptEntry = require('./lib/log-processing/deopt-entry')
 const CodeEntry = require('./lib/log-processing/code-entry')
+const parseSourcePosition = require('./lib/log-processing/source-position')
 const { parseOptimizationState } = require('./lib/log-processing/optimization-state')
 
 const groupByFileAndLocation = require('./lib/grouping/group-by-file-and-location')
@@ -20,14 +21,8 @@ function maybeNumber(s) {
 function formatName(entry) {
   if (!entry) return '<unknown>'
   const name = entry.func.getName()
-  const re = /(.*):([0-9]+):([0-9]+)$/
-  const array = re.exec(name)
-  if (!array) return { fnFile: name, line: -1, column: -1 }
-  return {
-      fnFile: array[1]
-    , line: maybeNumber(array[2])
-    , column: maybeNumber(array[3])
-  }
+  const { file: fnFile, line, column } = parseSourcePosition(name);
+  return { fnFile, line, column };
 }
 
 function locationKey(file, line, column) {
