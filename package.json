@@ -11,6 +11,9 @@
     "lib/",
     "deoptigate*"
   ],
+  "scripts": {
+    "test": "tape test/*.js"
+  },
   "repository": {
     "type": "git",
     "url": "git://github.com/thlorenz/deoptigate.git"
@@ -37,5 +40,7 @@
   "engine": {
     "node": ">=8"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "tape": "^5.0.0"
+  }
 }
