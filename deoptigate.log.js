@@ -36,7 +36,7 @@ async function deoptigateLog(p, { icStateChangesOnly = true } = {}) {
 }
 
 module.exports = {
-    processLog
-  , logToJSON
-  , deoptigateLog
+  processLog,
+  logToJSON,
+  deoptigateLog,
 }

@@ -16,12 +16,12 @@ function stateFromUrl() {
   const query = location.search.slice(1)
   const queryState = qs.parse(query)
   const state = {
-      highlightCode         : parseBool(queryState.highlightCode)
-    , includeAllSeverities  : parseBool(queryState.includeAllSeverities)
-    , selectedFileIdx       : parseNum(queryState.selectedFileIdx)
-    , selectedLocation      : parseNum(queryState.selectedLocation)
-    , selectedTabIdx        : parseNum(queryState.selectedTabIdx)
-    , selectedSummaryTabIdx : parseNum(queryState.selectedSummaryTabIdx)
+    highlightCode: parseBool(queryState.highlightCode),
+    includeAllSeverities: parseBool(queryState.includeAllSeverities),
+    selectedFileIdx: parseNum(queryState.selectedFileIdx),
+    selectedLocation: parseNum(queryState.selectedLocation),
+    selectedTabIdx: parseNum(queryState.selectedTabIdx),
+    selectedSummaryTabIdx: parseNum(queryState.selectedSummaryTabIdx),
   }
   return state
 }
@@ -35,6 +35,6 @@ function urlFromState(state) {
 }
 
 module.exports = {
-    stateFromUrl
-  , urlFromState
+  stateFromUrl,
+  urlFromState,
 }

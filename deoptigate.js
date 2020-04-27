@@ -8,7 +8,9 @@ const { Profile } = require('v8-tools-core/profile')
 const IcEntry = require('./lib/log-processing/ic-entry')
 const DeoptEntry = require('./lib/log-processing/deopt-entry')
 const CodeEntry = require('./lib/log-processing/code-entry')
-const { parseOptimizationState } = require('./lib/log-processing/optimization-state')
+const {
+  parseOptimizationState,
+} = require('./lib/log-processing/optimization-state')
 
 const groupByFileAndLocation = require('./lib/grouping/group-by-file-and-location')
 
@@ -24,9 +26,9 @@ function formatName(entry) {
   const array = re.exec(name)
   if (!array) return { fnFile: name, line: -1, column: -1 }
   return {
-      fnFile: array[1]
-    , line: maybeNumber(array[2])
-    , column: maybeNumber(array[3])
+    fnFile: array[1],
+    line: maybeNumber(array[2]),
+    column: maybeNumber(array[3]),
   }
 }
 
@@ -35,7 +37,15 @@ function locationKey(file, line, column) {
 }
 
 const propertyICParser = [
-  parseInt, parseInt, parseInt, null, null, parseInt, null, null, null
+  parseInt,
+  parseInt,
+  parseInt,
+  null,
+  null,
+  parseInt,
+  null,
+  null,
+  null,
 ]
 
 class DeoptProcessor extends LogReader {
@@ -47,56 +57,68 @@ class DeoptProcessor extends LogReader {
     // passing dispatch table that references `this` before invoking super
     // doesn't work, so we set it afterwards
     this.dispatchTable_ = {
-
-        // Collect info about CRUD of code
-        'code-creation': {
-            parsers: [
-              null, parseInt, parseInt, parseInt, parseInt, null, 'var-args'
-            ]
-          , processor: this._processCodeCreation.bind(this)
-        }
-      , 'code-move': {
-            parsers: [ parseInt, parseInt ]
-          , processor: this._processCodeMove.bind(this)
-        }
-      , 'code-delete': {
-            parsers: [ parseInt ]
-          , processor: this._processCodeDelete.bind(this)
-        }
-      , 'sfi-move': {
-            parsers: [ parseInt, parseInt ]
-          , processor: this._processFunctionMove.bind(this)
-        }
+      // Collect info about CRUD of code
+      'code-creation': {
+        parsers: [
+          null,
+          parseInt,
+          parseInt,
+          parseInt,
+          parseInt,
+          null,
+          'var-args',
+        ],
+        processor: this._processCodeCreation.bind(this),
+      },
+      'code-move': {
+        parsers: [parseInt, parseInt],
+        processor: this._processCodeMove.bind(this),
+      },
+      'code-delete': {
+        parsers: [parseInt],
+        processor: this._processCodeDelete.bind(this),
+      },
+      'sfi-move': {
+        parsers: [parseInt, parseInt],
+        processor: this._processFunctionMove.bind(this),
+      },
 
       // Collect deoptimization info
-      , 'code-deopt': {
-            parsers: [
-              parseInt, parseInt, parseInt, parseInt, parseInt, null, null, null
-            ]
-          , processor: this._processCodeDeopt.bind(this)
-        }
+      'code-deopt': {
+        parsers: [
+          parseInt,
+          parseInt,
+          parseInt,
+          parseInt,
+          parseInt,
+          null,
+          null,
+          null,
+        ],
+        processor: this._processCodeDeopt.bind(this),
+      },
 
       // Collect IC info
-      , 'LoadIC': {
-            parsers : propertyICParser
-          , processor: this._processPropertyIC.bind(this, 'LoadIC')
-        }
-      , 'StoreIC': {
-            parsers : propertyICParser
-          , processor: this._processPropertyIC.bind(this, 'StoreIC')
-        }
-      , 'KeyedLoadIC': {
-            parsers : propertyICParser
-          , processor: this._processPropertyIC.bind(this, 'KeyedLoadIC')
-        }
-      , 'KeyedStoreIC': {
-            parsers : propertyICParser
-          , processor: this._processPropertyIC.bind(this, 'KeyedStoreIC')
-        }
-      , 'StoreInArrayLiteralIC': {
-            parsers : propertyICParser
-          , processor: this._processPropertyIC.bind(this, 'StoreInArrayLiteralIC')
-        }
+      LoadIC: {
+        parsers: propertyICParser,
+        processor: this._processPropertyIC.bind(this, 'LoadIC'),
+      },
+      StoreIC: {
+        parsers: propertyICParser,
+        processor: this._processPropertyIC.bind(this, 'StoreIC'),
+      },
+      KeyedLoadIC: {
+        parsers: propertyICParser,
+        processor: this._processPropertyIC.bind(this, 'KeyedLoadIC'),
+      },
+      KeyedStoreIC: {
+        parsers: propertyICParser,
+        processor: this._processPropertyIC.bind(this, 'KeyedStoreIC'),
+      },
+      StoreInArrayLiteralIC: {
+        parsers: propertyICParser,
+        processor: this._processPropertyIC.bind(this, 'StoreInArrayLiteralIC'),
+      },
     }
 
     this._deserializedEntriesNames = []
@@ -115,16 +137,16 @@ class DeoptProcessor extends LogReader {
   }
 
   _processPropertyIC(
-      type
-    , pc
-    , line
-    , column
-    , old_state
-    , new_state
-    , map
-    , propertyKey
-    , modifier
-    , slow_reason
+    type,
+    pc,
+    line,
+    column,
+    old_state,
+    new_state,
+    map,
+    propertyKey,
+    modifier,
+    slow_reason
   ) {
     const { fnFile, state } = this.functionInfo(pc)
     const key = locationKey(fnFile, line, column)
@@ -139,17 +161,19 @@ class DeoptProcessor extends LogReader {
   // timestamp is in micro seconds
   // https://cs.chromium.org/chromium/src/v8/src/log.cc?l=892&rcl=8fecf0eff7357c1bee222f76c4e2f6fdd8759797
   _processCodeDeopt(
-      timestamp
-    , size
-    , code
-    , inliningId
-    , scriptOffset
-    , bailoutType
-    , sourcePositionText
-    , deoptReasonText
+    timestamp,
+    size,
+    code,
+    inliningId,
+    scriptOffset,
+    bailoutType,
+    sourcePositionText,
+    deoptReasonText
   ) {
     const { fnFile, state } = this.functionInfo(code)
-    const { file, line, column } = DeoptEntry.disassembleSourcePosition(sourcePositionText)
+    const { file, line, column } = DeoptEntry.disassembleSourcePosition(
+      sourcePositionText
+    )
 
     const key = locationKey(file, line, column)
     if (!this.entriesDeopt.has(key)) {
@@ -157,19 +181,29 @@ class DeoptProcessor extends LogReader {
       this.entriesDeopt.set(key, entry)
     }
     const deoptEntry = this.entriesDeopt.get(key)
-    deoptEntry.addUpdate(timestamp, bailoutType, deoptReasonText, state, inliningId)
+    deoptEntry.addUpdate(
+      timestamp,
+      bailoutType,
+      deoptReasonText,
+      state,
+      inliningId
+    )
   }
 
-  _processCodeCreation(
-    type, kind, timestamp, start, size, name, maybe_func
-  ) {
+  _processCodeCreation(type, kind, timestamp, start, size, name, maybe_func) {
     name = this._deserializedEntriesNames[start] || name
 
     if (maybe_func.length) {
       const funcAddr = parseInt(maybe_func[0])
       const state = parseOptimizationState(maybe_func[1])
       this._profile.addFuncCode(
-        type, name, timestamp, start, size, funcAddr, state
+        type,
+        name,
+        timestamp,
+        start,
+        size,
+        funcAddr,
+        state
       )
       const isScript = type === 'Script'
       const isUserFunction = type === 'LazyCompile'
@@ -178,12 +212,15 @@ class DeoptProcessor extends LogReader {
 
         // only interested in Node.js anonymous wrapper function
         // (function (exports, require, module, __filename, __dirname) {
-        const isNodeWrapperFunction = (line === 1 && column === 1)
+        const isNodeWrapperFunction = line === 1 && column === 1
         if (isScript && !isNodeWrapperFunction) return
 
         const key = locationKey(fnFile, line, column)
         if (!this.entriesCode.has(key)) {
-          this.entriesCode.set(key, new CodeEntry({ fnFile, line, column, isScript }))
+          this.entriesCode.set(
+            key,
+            new CodeEntry({ fnFile, line, column, isScript })
+          )
         }
         const code = this.entriesCode.get(key)
         code.addUpdate(timestamp, state)
@@ -228,7 +265,7 @@ class DeoptProcessor extends LogReader {
 
   filterIcStateChanges() {
     const emptyEntries = new Set()
-    for (const [ key, entry ] of this.entriesIC) {
+    for (const [key, entry] of this.entriesIC) {
       entry.filterIcStateChanges()
       if (entry.updates.length === 0) emptyEntries.add(key)
     }
@@ -270,6 +307,6 @@ function deoptigate(groupedByFile) {
 }
 
 module.exports = {
-    processLogContent
-  , deoptigate
+  processLogContent,
+  deoptigate,
 }

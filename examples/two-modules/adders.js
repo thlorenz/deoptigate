@@ -1,20 +1,20 @@
 'use strict'
 
 const {
-    Object1
-  , Object2
-  , Object3
-  , Object4
-  , Object5
-  , Object6
-  , Object7
-  , Object8
+  Object1,
+  Object2,
+  Object3,
+  Object4,
+  Object5,
+  Object6,
+  Object7,
+  Object8,
 } = require('./objects')
 
 // We access this object in all the functions as otherwise
 // v8 will just inline them since they are so short
 const preventInlining = {
-  flag: false
+  flag: false,
 }
 
 function addSmis(a, b) {
@@ -39,7 +39,7 @@ function addAny(a, b) {
   return a + b
 }
 
-const ITER = 1E3
+const ITER = 1e3
 
 var results = []
 
@@ -48,7 +48,7 @@ function processResult(r) {
   if (r === -1) preventInlining.flag = true
   results.push(r)
   // prevent exhausting memory
-  if (results.length > 1E5) results = []
+  if (results.length > 1e5) results = []
 }
 
 for (let i = 0; i < ITER; i++) {

@@ -5,18 +5,17 @@ const { Component } = React
 const scrollIntoView = require('scroll-into-view-if-needed')
 
 const assert = require('assert')
-const { nameIcState, severityIcState } = require('../../lib/log-processing/ic-state')
 const {
-    nameOptimizationState
-  , severityOfOptimizationState
+  nameIcState,
+  severityIcState,
+} = require('../../lib/log-processing/ic-state')
+const {
+  nameOptimizationState,
+  severityOfOptimizationState,
 } = require('../../lib/log-processing/optimization-state')
 const { MIN_SEVERITY } = require('../../lib/severities')
 
-const severityClassNames = [
-    'green i'
-  , 'blue'
-  , 'red b'
-]
+const severityClassNames = ['green i', 'blue', 'red b']
 
 const OPT_TAB_IDX = 0
 const DEOPT_TAB_IDX = 1
@@ -25,12 +24,33 @@ const ICS_TAB_IDX = 2
 class SummaryView extends Component {
   constructor(props) {
     super(props)
-    const { ics, icLocations, deopts, deoptLocations, onsummaryClicked, ontabHeaderClicked } = props
+    const {
+      ics,
+      icLocations,
+      deopts,
+      deoptLocations,
+      onsummaryClicked,
+      ontabHeaderClicked,
+    } = props
 
-    assert(ics == null || icLocations != null, 'need to provide locations for ics')
-    assert(deopts == null || deoptLocations != null, 'need to provide locations for deopts')
-    assert.equal(typeof onsummaryClicked, 'function', 'need to pass onsummaryClicked function')
-    assert.equal(typeof ontabHeaderClicked, 'function', 'need to pass ontabHeaderClicked function')
+    assert(
+      ics == null || icLocations != null,
+      'need to provide locations for ics'
+    )
+    assert(
+      deopts == null || deoptLocations != null,
+      'need to provide locations for deopts'
+    )
+    assert.equal(
+      typeof onsummaryClicked,
+      'function',
+      'need to pass onsummaryClicked function'
+    )
+    assert.equal(
+      typeof ontabHeaderClicked,
+      'function',
+      'need to pass ontabHeaderClicked function'
+    )
 
     this._bind()
   }
@@ -44,7 +64,9 @@ class SummaryView extends Component {
   _maybeScrollIntoView() {
     const { selectedLocation } = this.props
     if (selectedLocation == null) return
-    const summary = document.getElementById(`summary-location-${selectedLocation}`)
+    const summary = document.getElementById(
+      `summary-location-${selectedLocation}`
+    )
     if (summary == null) return
     scrollIntoView(summary, { behavior: 'smooth', scrollMode: 'if-needed' })
   }
@@ -59,21 +81,33 @@ class SummaryView extends Component {
 
   render() {
     const {
-        className = ''
-      , ics
-      , icLocations
-      , deopts
-      , deoptLocations
-      , codes
-      , codeLocations
-      , selectedTabIdx
+      className = '',
+      ics,
+      icLocations,
+      deopts,
+      deoptLocations,
+      codes,
+      codeLocations,
+      selectedTabIdx,
     } = this.props
-    const renderedDeopts = this._renderDeopts(deopts, deoptLocations, selectedTabIdx === DEOPT_TAB_IDX)
-    const renderedIcs = this._renderIcs(ics, icLocations, selectedTabIdx === ICS_TAB_IDX)
-    const renderedCodes = this._renderCodes(codes, codeLocations, selectedTabIdx === OPT_TAB_IDX)
+    const renderedDeopts = this._renderDeopts(
+      deopts,
+      deoptLocations,
+      selectedTabIdx === DEOPT_TAB_IDX
+    )
+    const renderedIcs = this._renderIcs(
+      ics,
+      icLocations,
+      selectedTabIdx === ICS_TAB_IDX
+    )
+    const renderedCodes = this._renderCodes(
+      codes,
+      codeLocations,
+      selectedTabIdx === OPT_TAB_IDX
+    )
     return (
       <div className={className}>
-        <div className='flex flex-row'>
+        <div className="flex flex-row">
           {this._renderTabHeader('Optimizations', OPT_TAB_IDX)}
           {this._renderTabHeader('Deoptimizations', DEOPT_TAB_IDX)}
           {this._renderTabHeader('Incline Caches', ICS_TAB_IDX)}
@@ -94,23 +128,35 @@ class SummaryView extends Component {
   _renderTabHeader(label, idx) {
     const { selectedTabIdx } = this.props
     const selected = idx === selectedTabIdx
-    const baseClass = 'flex flex-column ttu dib link pa3 bt outline-0 tab-header'
+    const baseClass =
+      'flex flex-column ttu dib link pa3 bt outline-0 tab-header'
     const selectedClass = 'b--blue blue'
     const unselectedClass = 'white b--white'
-    const className = selected ? `${baseClass} ${selectedClass}` : `${baseClass} ${unselectedClass}`
+    const className = selected
+      ? `${baseClass} ${selectedClass}`
+      : `${baseClass} ${unselectedClass}`
 
-    return <a className={className} href='#' onClick={() => this._ontabHeaderClicked(idx)}>{label}</a>
+    return (
+      <a
+        className={className}
+        href="#"
+        onClick={() => this._ontabHeaderClicked(idx)}
+      >
+        {label}
+      </a>
+    )
   }
 
   _renderDataPoint(data, locations, renderDetails) {
     const { selectedLocation, includeAllSeverities, relativePath } = this.props
-    if (locations.length === 0) return <h4 className='ml4'>None</h4>
+    if (locations.length === 0) return <h4 className="ml4">None</h4>
     const rendered = []
     for (const loc of locations) {
       const info = data.get(loc)
       if (!includeAllSeverities && info.severity <= MIN_SEVERITY) continue
 
-      const highlightedClass = selectedLocation === info.id ? 'bg-light-yellow' : 'bg-light-green'
+      const highlightedClass =
+        selectedLocation === info.id ? 'bg-light-yellow' : 'bg-light-green'
       const className = `${highlightedClass} ba br2 bw1 ma3 pa2`
       rendered.push(
         <div className={className} key={info.id}>
@@ -127,7 +173,7 @@ class SummaryView extends Component {
     const className = selected ? '' : 'dn'
     const rendered = this._renderDataPoint(ics, icLocations, this._renderIc)
     return (
-      <div key='ics' className={className}>
+      <div key="ics" className={className}>
         {rendered}
       </div>
     )
@@ -136,9 +182,13 @@ class SummaryView extends Component {
   _renderDeopts(deopts, deoptLocations, selected) {
     if (deopts == null) return null
     const className = selected ? '' : 'dn'
-    const rendered = this._renderDataPoint(deopts, deoptLocations, this._renderDeopt)
+    const rendered = this._renderDataPoint(
+      deopts,
+      deoptLocations,
+      this._renderDeopt
+    )
     return (
-      <div key='deopts' className={className}>
+      <div key="deopts" className={className}>
         {rendered}
       </div>
     )
@@ -147,32 +197,29 @@ class SummaryView extends Component {
   _renderCodes(codes, codeLocations, selected) {
     if (codes == null) return null
     const className = selected ? '' : 'dn'
-    const rendered = this._renderDataPoint(codes, codeLocations, this._renderCode)
+    const rendered = this._renderDataPoint(
+      codes,
+      codeLocations,
+      this._renderCode
+    )
     return (
-      <div key='optimizations' className={className}>
+      <div key="optimizations" className={className}>
         {rendered}
       </div>
     )
   }
 
   _summary(info, relativePath) {
-    const {
-        id
-      , functionName
-      , line
-      , column
-    } = info
-    const locationEl = <span className='dark-blue f5 mr2'>{id}</span>
-    const onclicked = e => {
+    const { id, functionName, line, column } = info
+    const locationEl = <span className="dark-blue f5 mr2">{id}</span>
+    const onclicked = (e) => {
       e.preventDefault()
       e.stopPropagation()
       this._onsummaryClicked(id)
     }
 
     const fullLoc = (
-      <a href='#'
-        className='i items'
-        onClick={onclicked}>
+      <a href="#" className="i items" onClick={onclicked}>
         {functionName} at {relativePath}:{line}:{column}
       </a>
     )
@@ -188,37 +235,29 @@ class SummaryView extends Component {
     const rows = info.updates.map((update, idx) => this._deoptRow(update, idx))
     return (
       <table key={'deopt:' + info.id}>
-        <thead className='f5 b pt2'>
+        <thead className="f5 b pt2">
           <tr>
-            <td class='pt2 pr3 basegreen'>Timestamp</td>
-            <td class='pt2 pr3 basegreen'>Bailout</td>
-            <td class='pt2 pr3 basegreen'>Reason</td>
-            <td class='pt2 pr3 basegreen'>Inlined</td>
+            <td class="pt2 pr3 basegreen">Timestamp</td>
+            <td class="pt2 pr3 basegreen">Bailout</td>
+            <td class="pt2 pr3 basegreen">Reason</td>
+            <td class="pt2 pr3 basegreen">Inlined</td>
           </tr>
         </thead>
-        <tbody>
-          {rows}
-        </tbody>
+        <tbody>{rows}</tbody>
       </table>
     )
   }
 
   _deoptRow(info) {
-    const {
-        inlined
-      , bailoutType
-      , deoptReason
-      , timestamp
-      , severity
-    } = info
+    const { inlined, bailoutType, deoptReason, timestamp, severity } = info
     const bailoutClassName = severityClassNames[severity - 1]
-    const timeStampMs = (timestamp / 1E3).toFixed()
+    const timeStampMs = (timestamp / 1e3).toFixed()
     return (
       <tr key={timestamp}>
         <td>{timeStampMs}ms</td>
         <td className={bailoutClassName + ' pr3'}>{bailoutType}</td>
-        <td className='pr3'>{deoptReason}</td>
-        <td className='gray pr3'>{inlined ? 'yes' : 'no'}</td>
+        <td className="pr3">{deoptReason}</td>
+        <td className="gray pr3">{inlined ? 'yes' : 'no'}</td>
       </tr>
     )
   }
@@ -227,28 +266,21 @@ class SummaryView extends Component {
     const rows = info.updates.map((update, idx) => this._icRow(update, idx))
     return (
       <table key={'ic:' + info.id}>
-        <thead className='f5 b '>
+        <thead className="f5 b ">
           <tr>
-            <td class='pt2 pr3 basegreen'>Old State</td>
-            <td class='pt2 pr3 basegreen'>New State</td>
-            <td class='pt2 pr3 basegreen'>Key</td>
-            <td class='pt2 pr3 basegreen'>Map</td>
+            <td class="pt2 pr3 basegreen">Old State</td>
+            <td class="pt2 pr3 basegreen">New State</td>
+            <td class="pt2 pr3 basegreen">Key</td>
+            <td class="pt2 pr3 basegreen">Map</td>
           </tr>
         </thead>
-        <tbody>
-          {rows}
-        </tbody>
+        <tbody>{rows}</tbody>
       </table>
     )
   }
 
   _icRow(update, id) {
-    const {
-        oldState
-      , newState
-      , key
-      , map
-    } = update
+    const { oldState, newState, key, map } = update
     const oldStateName = nameIcState(oldState)
     const severityOldState = severityIcState(oldState)
     const oldStateClassName = severityClassNames[severityOldState - 1]
@@ -262,8 +294,8 @@ class SummaryView extends Component {
       <tr key={key + id}>
         <td className={oldStateClassName + ' pr3'}>{oldStateName}</td>
         <td className={newStateClassName + ' pr3'}>{newStateName}</td>
-        <td className='black pr3'>{key}</td>
-        <td className='gray pr3'>{mapString}</td>
+        <td className="black pr3">{key}</td>
+        <td className="gray pr3">{mapString}</td>
       </tr>
     )
   }
@@ -272,22 +304,20 @@ class SummaryView extends Component {
     const rows = info.updates.map((update, idx) => this._codeRow(update, idx))
     return (
       <table key={'code:' + info.id}>
-        <thead className='f5 b '>
+        <thead className="f5 b ">
           <tr>
-            <td class='pt2 pr3 basegreen'>Timestamp</td>
-            <td class='pt2 pr3 basegreen'>Optimization State</td>
+            <td class="pt2 pr3 basegreen">Timestamp</td>
+            <td class="pt2 pr3 basegreen">Optimization State</td>
           </tr>
         </thead>
-        <tbody>
-          {rows}
-        </tbody>
+        <tbody>{rows}</tbody>
       </table>
     )
   }
 
   _codeRow(info, id) {
     const { timestamp, state } = info
-    const timeStampMs = (timestamp / 1E3).toFixed()
+    const timeStampMs = (timestamp / 1e3).toFixed()
     const codeState = nameOptimizationState(state)
     const severity = severityOfOptimizationState(state)
     const codeStateClassName = severityClassNames[severity - 1]
@@ -313,10 +343,16 @@ class SummaryView extends Component {
     onsummaryClicked(id)
   }
 
-  static get OPT_TAB_IDX() { return OPT_TAB_IDX }
-  static get DEOPT_TAB_IDX() { return DEOPT_TAB_IDX }
-  static get ICS_TAB_IDX() { return ICS_TAB_IDX }
+  static get OPT_TAB_IDX() {
+    return OPT_TAB_IDX
+  }
+  static get DEOPT_TAB_IDX() {
+    return DEOPT_TAB_IDX
+  }
+  static get ICS_TAB_IDX() {
+    return ICS_TAB_IDX
+  }
 }
 module.exports = {
-  SummaryView
+  SummaryView,
 }

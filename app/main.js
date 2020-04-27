@@ -25,12 +25,12 @@ function app() {
 }
 
 const initialState = {
-    selectedFile: null
-  , selectedLocation: null
-  , selectedSummaryTabIdx: SummaryView.OPT_TAB_IDX
-  , includeAllSeverities: false
-  , highlightCode: true
-  , selectedTabIdx: FILES_TAB_IDX
+  selectedFile: null,
+  selectedLocation: null,
+  selectedSummaryTabIdx: SummaryView.OPT_TAB_IDX,
+  includeAllSeverities: false,
+  highlightCode: true,
+  selectedTabIdx: FILES_TAB_IDX,
 }
 
 class MainView extends Component {
@@ -50,7 +50,9 @@ class MainView extends Component {
   _bind() {
     this._onlocationSelected = this._onlocationSelected.bind(this)
     this._onsummaryTabIdxChanged = this._onsummaryTabIdxChanged.bind(this)
-    this._onincludeAllSeveritiesChanged = this._onincludeAllSeveritiesChanged.bind(this)
+    this._onincludeAllSeveritiesChanged = this._onincludeAllSeveritiesChanged.bind(
+      this
+    )
     this._onhighlightCodeChanged = this._onhighlightCodeChanged.bind(this)
     this._onfileClicked = this._onfileClicked.bind(this)
     this._updateUrl = this._updateUrl.bind(this)
@@ -62,16 +64,17 @@ class MainView extends Component {
 
     const tabs = this._renderTabs()
     return (
-      <div className='center pa2'>
-        <div className='flex flex-row'>
+      <div className="center pa2">
+        <div className="flex flex-row">
           {this._renderTabHeader('Files', FILES_TAB_IDX)}
           {this._renderTabHeader('Details', DETAILS_TAB_IDX)}
           <ToolbarView
-            className='flex flex-column self-center ml4 pl4 bl bw1 b--silver'
+            className="flex flex-column self-center ml4 pl4 bl bw1 b--silver"
             includeAllSeverities={includeAllSeverities}
             highlightCode={highlightCode}
             onincludeAllSeveritiesChanged={this._onincludeAllSeveritiesChanged}
-            onhighlightCodeChanged={this._onhighlightCodeChanged} />
+            onhighlightCodeChanged={this._onhighlightCodeChanged}
+          />
         </div>
         {tabs}
       </div>
@@ -85,12 +88,23 @@ class MainView extends Component {
   _renderTabHeader(label, idx) {
     const { selectedTabIdx } = this.state
     const selected = idx === selectedTabIdx
-    const baseClass = 'flex flex-column ttu dib link pa3 bt outline-0 tab-header'
+    const baseClass =
+      'flex flex-column ttu dib link pa3 bt outline-0 tab-header'
     const selectedClass = 'b--blue blue'
     const unselectedClass = 'white b--white'
-    const className = selected ? `${baseClass} ${selectedClass}` : `${baseClass} ${unselectedClass}`
+    const className = selected
+      ? `${baseClass} ${selectedClass}`
+      : `${baseClass} ${unselectedClass}`
 
-    return <a className={className} href='#' onClick={() => this._ontabHeaderClicked(idx)}>{label}</a>
+    return (
+      <a
+        className={className}
+        href="#"
+        onClick={() => this._ontabHeaderClicked(idx)}
+      >
+        {label}
+      </a>
+    )
   }
 
   _renderTabs() {
@@ -98,7 +112,7 @@ class MainView extends Component {
     const files = this._renderFiles(selectedTabIdx === FILES_TAB_IDX)
     const details = this._renderFileDetails(selectedTabIdx === DETAILS_TAB_IDX)
     return (
-      <div className='flex flex-row vh-100 overflow-scroll'>
+      <div className="flex flex-row vh-100 overflow-scroll">
         {files}
         {details}
       </div>
@@ -120,18 +134,19 @@ class MainView extends Component {
         selectedFile={selectedFile}
         groups={groups}
         includeAllSeverities={includeAllSeverities}
-        onfileClicked={this._onfileClicked} />
+        onfileClicked={this._onfileClicked}
+      />
     )
   }
 
   _renderFileDetails(selected) {
     const { groups } = this.props
     const {
-        selectedFile
-      , selectedLocation
-      , selectedSummaryTabIdx
-      , includeAllSeverities
-      , highlightCode
+      selectedFile,
+      selectedLocation,
+      selectedSummaryTabIdx,
+      includeAllSeverities,
+      highlightCode,
     } = this.state
     const display = selected ? 'flex' : 'dn'
     const className = `${display} flex-row w-100 ma2`
@@ -176,21 +191,21 @@ class MainView extends Component {
 
   _updateUrl() {
     const {
-        selectedFile
-      , selectedLocation
-      , includeAllSeverities
-      , highlightCode
-      , selectedTabIdx
-      , selectedSummaryTabIdx
+      selectedFile,
+      selectedLocation,
+      includeAllSeverities,
+      highlightCode,
+      selectedTabIdx,
+      selectedSummaryTabIdx,
     } = this.state
 
     const state = {
-        selectedFileIdx: this._indexFromFile(selectedFile)
-      , selectedLocation
-      , includeAllSeverities
-      , highlightCode
-      , selectedTabIdx
-      , selectedSummaryTabIdx
+      selectedFileIdx: this._indexFromFile(selectedFile),
+      selectedLocation,
+      includeAllSeverities,
+      highlightCode,
+      selectedTabIdx,
+      selectedSummaryTabIdx,
     }
     try {
       history.pushState(state, 'deoptigate', urlFromState(state))
@@ -204,23 +219,23 @@ class MainView extends Component {
     if (history.state == null) return null
 
     let {
-        selectedFileIdx
-      , selectedLocation
-      , includeAllSeverities
-      , highlightCode
-      , selectedTabIdx
-      , selectedSummaryTabIdx
+      selectedFileIdx,
+      selectedLocation,
+      includeAllSeverities,
+      highlightCode,
+      selectedTabIdx,
+      selectedSummaryTabIdx,
     } = history.state
     if (selectedLocation === '') selectedLocation = null
 
     const selectedFile = this._fileFromIndex(selectedFileIdx)
     const override = {
-        includeAllSeverities
-      , highlightCode
-      , selectedFile
-      , selectedTabIdx
-      , selectedLocation
-      , selectedSummaryTabIdx
+      includeAllSeverities,
+      highlightCode,
+      selectedFile,
+      selectedTabIdx,
+      selectedLocation,
+      selectedSummaryTabIdx,
     }
 
     this.setState(Object.assign(this.state, override))
@@ -230,21 +245,21 @@ class MainView extends Component {
     const state = stateFromUrl()
     if (state == null) return null
     const {
-        selectedFileIdx
-      , selectedLocation
-      , includeAllSeverities
-      , highlightCode
-      , selectedTabIdx
-      , selectedSummaryTabIdx
+      selectedFileIdx,
+      selectedLocation,
+      includeAllSeverities,
+      highlightCode,
+      selectedTabIdx,
+      selectedSummaryTabIdx,
     } = state
     const selectedFile = this._fileFromIndex(selectedFileIdx)
     return {
-        selectedFile
-      , selectedLocation
-      , includeAllSeverities
-      , highlightCode
-      , selectedTabIdx
-      , selectedSummaryTabIdx
+      selectedFile,
+      selectedLocation,
+      includeAllSeverities,
+      highlightCode,
+      selectedTabIdx,
+      selectedSummaryTabIdx,
     }
   }
 
@@ -252,19 +267,34 @@ class MainView extends Component {
    * Events
    */
   _ontabHeaderClicked(idx) {
-    this.setState(Object.assign(this.state, { selectedTabIdx: idx }), this._updateUrl)
+    this.setState(
+      Object.assign(this.state, { selectedTabIdx: idx }),
+      this._updateUrl
+    )
   }
 
   _onlocationSelected(id) {
-    this.setState(Object.assign(this.state, { selectedLocation: id }), this._updateUrl)
+    this.setState(
+      Object.assign(this.state, { selectedLocation: id }),
+      this._updateUrl
+    )
   }
 
   _onsummaryTabIdxChanged(idx) {
-    this.setState(Object.assign(this.state, { selectedSummaryTabIdx: idx }), this._updateUrl)
+    this.setState(
+      Object.assign(this.state, { selectedSummaryTabIdx: idx }),
+      this._updateUrl
+    )
   }
 
   _onincludeAllSeveritiesChanged(includeAllSeverities) {
-    this.setState(Object.assign(this.state, { includeAllSeverities, selectedLocation: null }), this._updateUrl)
+    this.setState(
+      Object.assign(this.state, {
+        includeAllSeverities,
+        selectedLocation: null,
+      }),
+      this._updateUrl
+    )
   }
 
   _onhighlightCodeChanged(highlightCode) {
@@ -272,12 +302,15 @@ class MainView extends Component {
   }
 
   _onfileClicked(file) {
-    this.setState(Object.assign(this.state, {
-        selectedFile: file
-      , selectedLocation: null
-      // auto open details view when file is selected
-      , selectedTabIdx: DETAILS_TAB_IDX
-    }), this._updateUrl)
+    this.setState(
+      Object.assign(this.state, {
+        selectedFile: file,
+        selectedLocation: null,
+        // auto open details view when file is selected
+        selectedTabIdx: DETAILS_TAB_IDX,
+      }),
+      this._updateUrl
+    )
   }
 }
 
@@ -285,10 +318,7 @@ async function deoptigateRender(groupedByFile) {
   try {
     const groupedByFileAndLocation = deoptigate(groupedByFile)
 
-    render(
-      <MainView groups={groupedByFileAndLocation} />
-    , app()
-    )
+    render(<MainView groups={groupedByFileAndLocation} />, app())
   } catch (err) {
     console.error(err)
   }

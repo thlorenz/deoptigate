@@ -12,14 +12,18 @@ const MarkerResolver = require('../../lib/rendering/marker-resolver')
 
 const markOnly = require('../../lib/rendering/mark-only')
 
-const MAX_HIGHLIGHT_LEN = 1E5
+const MAX_HIGHLIGHT_LEN = 1e5
 
 class CodeView extends Component {
   constructor(props) {
     super()
 
     const { onmarkerClicked } = props
-    assert.equal(typeof onmarkerClicked, 'function', 'need to pass onmarkerClicked function')
+    assert.equal(
+      typeof onmarkerClicked,
+      'function',
+      'need to pass onmarkerClicked function'
+    )
     this._bind()
   }
 
@@ -37,7 +41,7 @@ class CodeView extends Component {
 
   componentDidMount() {
     const rootEl = ReactDOM.findDOMNode(this)
-    rootEl.addEventListener('click', event => {
+    rootEl.addEventListener('click', (event) => {
       const tgt = event.target
       const { markerid, markertype } = tgt.dataset
       if (markerid == null) return
@@ -55,42 +59,42 @@ class CodeView extends Component {
   shouldComponentUpdate(nextProps) {
     const props = this.props
     return (
-         props.code !== nextProps.code
-      || props.selectedLocation !== nextProps.selectedLocation
-      || props.includeAllSeverities !== nextProps.includeAllSeverities
-      || props.highlightCode !== nextProps.highlightCode
+      props.code !== nextProps.code ||
+      props.selectedLocation !== nextProps.selectedLocation ||
+      props.includeAllSeverities !== nextProps.includeAllSeverities ||
+      props.highlightCode !== nextProps.highlightCode
     )
   }
 
   render() {
     const {
-        className = ''
-      , ics
-      , deopts
-      , codes
-      , icLocations
-      , deoptLocations
-      , codeLocations
-      , selectedLocation
-      , includeAllSeverities
+      className = '',
+      ics,
+      deopts,
+      codes,
+      icLocations,
+      deoptLocations,
+      codeLocations,
+      selectedLocation,
+      includeAllSeverities,
     } = this.props
 
     const markerResolver = new MarkerResolver({
-        deopts
-      , deoptLocations
-      , ics
-      , icLocations
-      , codes
-      , codeLocations
-      , selectedLocation
-      , includeAllSeverities
+      deopts,
+      deoptLocations,
+      ics,
+      icLocations,
+      codes,
+      codeLocations,
+      selectedLocation,
+      includeAllSeverities,
     })
 
     const theme = new Theme(markerResolver).theme
     const highlightedCode = this._tryHighlightCode(theme, markerResolver)
     return (
       <div className={className}>
-        <div dangerouslySetInnerHTML={{__html: highlightedCode}} />
+        <div dangerouslySetInnerHTML={{ __html: highlightedCode }} />
       </div>
     )
   }
@@ -130,5 +134,5 @@ class CodeView extends Component {
 }
 
 module.exports = {
-  CodeView
+  CodeView,
 }
