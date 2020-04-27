@@ -12,6 +12,8 @@
     "deoptigate*"
   ],
   "scripts": {
+    "lint": "prettier -c {app,bin,examples,lib}/**/*.js deoptigate.js deoptigate.log.js",
+    "lint:fix": "prettier --write {app,bin,examples,lib}/**/*.js deoptigate.js deoptigate.log.js",
     "test": "tape test/*.test.js"
   },
   "repository": {
@@ -42,6 +44,7 @@
   },
   "devDependencies": {
     "escape-string-regexp": "^4.0.0",
+    "prettier": "^2.0.5",
     "tape": "^5.0.0"
   }
 }
