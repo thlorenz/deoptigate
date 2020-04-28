@@ -12,7 +12,7 @@
     "deoptigate*"
   ],
   "scripts": {
-    "test": "tape test/*.js"
+    "test": "tape test/*.test.js"
   },
   "repository": {
     "type": "git",
@@ -41,6 +41,7 @@
     "node": ">=8"
   },
   "devDependencies": {
+    "escape-string-regexp": "^4.0.0",
     "tape": "^5.0.0"
   }
 }
