@@ -23,6 +23,8 @@ function repoRoot(...args) {
 async function prepareLogFile(srcLog, replacements) {
   let contents = await readFile(srcLog, 'utf8')
 
+  // Windows + Git shenanigans
+  contents = contents.replace(/\r\n/g, '\n');
   for (const [template, realPath] of replacements) {
     contents = contents.replace(
       new RegExp(escapeRegex(template), 'g'),
