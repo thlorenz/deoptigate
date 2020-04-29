@@ -38,7 +38,7 @@ async function prepareLogFile(srcLog, replacements) {
 }
 
 test('adders.v8.log', async (t) => {
-  t.plan(8)
+  t.plan(9)
 
   const replacements = [
     [
@@ -49,15 +49,17 @@ test('adders.v8.log', async (t) => {
   const addersSrcFile = replacements[0][1]
   const srcLogPath = path.join(__dirname, 'logs', 'adders.v8.log')
   const destLogPath = await prepareLogFile(srcLogPath, replacements)
-
+  
   const result = await deoptigateLog(destLogPath)
   t.equal(result.size, 1, 'number of files')
-
+  
   const fileData = result.get(addersSrcFile)
+  const fileSrc = await readFile(addersSrcFile, 'utf8');
   t.equal(fileData.fullPath, addersSrcFile, 'fullPath')
   t.equal(fileData.ics.size, 33, 'number of ics')
   t.equal(fileData.deopts.size, 7, 'number of deopts')
   t.equal(fileData.codes.size, 16, 'number of codes')
+  t.equal(fileData.src, fileSrc, 'file source')
 
   const deoptLocation = fileData.deoptLocations[0]
   t.equal(deoptLocation, 'addAny:93:27', 'first deoptLocation')
@@ -70,7 +72,7 @@ test('adders.v8.log', async (t) => {
 })
 
 test('two-modules.v8.log', async (t) => {
-  t.plan(8)
+  t.plan(9)
 
   const replacements = [
     [
@@ -91,10 +93,12 @@ test('two-modules.v8.log', async (t) => {
   t.equal(result.size, 2, 'number of files')
 
   const fileData = result.get(srcFile)
+  const fileSrc = await readFile(srcFile, 'utf8');
   t.equal(fileData.fullPath, srcFile, 'fullPath')
   t.equal(fileData.ics.size, 25, 'number of ics')
   t.equal(fileData.deopts.size, 0, 'number of deopts')
   t.equal(fileData.codes.size, 8, 'number of codes')
+  t.equal(fileData.src, fileSrc, 'file source')
 
   const icLocation = fileData.icLocations[0]
   t.equal(icLocation, 'Object1:3:12', 'first icLocation')
