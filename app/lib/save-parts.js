@@ -21,7 +21,7 @@ function saveEntry(json) {
   const entryJS = `
   (function () {
     const info = ${json}
-    deoptigateRender(info)
+    return deoptigateRender(info)
   })()
   `
 
