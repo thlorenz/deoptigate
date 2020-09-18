@@ -12,8 +12,8 @@
     "deoptigate*"
   ],
   "scripts": {
-    "lint": "prettier -c {app,bin,examples,lib}/**/*.js deoptigate.js deoptigate.log.js",
-    "lint:fix": "prettier --write {app,bin,examples,lib}/**/*.js deoptigate.js deoptigate.log.js",
+    "lint": "prettier -c {bin,examples,lib}/**/*.js app/{components,lib}/**/*.js app/main.js deoptigate.js deoptigate.log.js",
+    "lint:fix": "prettier --write {bin,examples,lib}/**/*.js app/{components,lib}/**/*.js app/main.js deoptigate.js deoptigate.log.js",
     "test": "tape test/*.test.js"
   },
   "repository": {
