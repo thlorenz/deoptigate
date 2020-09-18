@@ -64,12 +64,12 @@ class Object8 {
 }
 
 module.exports = {
-    Object1
-  , Object2
-  , Object3
-  , Object4
-  , Object5
-  , Object6
-  , Object7
-  , Object8
+  Object1,
+  Object2,
+  Object3,
+  Object4,
+  Object5,
+  Object6,
+  Object7,
+  Object8,
 }

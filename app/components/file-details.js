@@ -13,7 +13,11 @@ class FileDetailsView extends Component {
     super(props)
 
     const { onsummaryTabIdxChanged } = props
-    assert.equal(typeof onsummaryTabIdxChanged, 'function', 'need to pass onsummaryTabIdxChanged function')
+    assert.equal(
+      typeof onsummaryTabIdxChanged,
+      'function',
+      'need to pass onsummaryTabIdxChanged function'
+    )
 
     this._bind()
   }
@@ -25,31 +29,31 @@ class FileDetailsView extends Component {
 
   render() {
     const {
-        groups
-      , selectedFile
-      , selectedLocation
-      , includeAllSeverities
-      , highlightCode
-      , className = ''
-      , selectedSummaryTabIdx
-      , onsummaryClicked
+      groups,
+      selectedFile,
+      selectedLocation,
+      includeAllSeverities,
+      highlightCode,
+      className = '',
+      selectedSummaryTabIdx,
+      onsummaryClicked,
     } = this.props
 
     const {
-        ics
-      , icLocations
-      , deopts
-      , deoptLocations
-      , codes
-      , codeLocations
-      , src
-      , relativePath
+      ics,
+      icLocations,
+      deopts,
+      deoptLocations,
+      codes,
+      codeLocations,
+      src,
+      relativePath,
     } = groups.get(selectedFile)
 
     return (
       <div className={className}>
         <CodeView
-          className='flex-column vh-85 w-50 code-view'
+          className="flex-column vh-85 w-50 code-view"
           selectedLocation={selectedLocation}
           fileName={selectedFile}
           code={src}
@@ -61,9 +65,10 @@ class FileDetailsView extends Component {
           codeLocations={codeLocations}
           includeAllSeverities={includeAllSeverities}
           highlightCode={highlightCode}
-          onmarkerClicked={this._onmarkerClicked} />
+          onmarkerClicked={this._onmarkerClicked}
+        />
         <SummaryView
-          className='flex-column vh-85 w-50 summary-view'
+          className="flex-column vh-85 w-50 summary-view"
           file={selectedFile}
           relativePath={relativePath}
           selectedLocation={selectedLocation}
@@ -76,22 +81,24 @@ class FileDetailsView extends Component {
           includeAllSeverities={includeAllSeverities}
           selectedTabIdx={selectedSummaryTabIdx}
           ontabHeaderClicked={this._onsummaryTabHeaderClicked}
-          onsummaryClicked={onsummaryClicked} />
+          onsummaryClicked={onsummaryClicked}
+        />
       </div>
     )
   }
 
   _onmarkerClicked(id, type) {
     const {
-        onmarkerClicked
-      , onsummaryTabIdxChanged
-      , selectedSummaryTabIdx
+      onmarkerClicked,
+      onsummaryTabIdxChanged,
+      selectedSummaryTabIdx,
     } = this.props
-    const markerSummaryTabIdx = (
-        type === 'code' ? SummaryView.OPT_TAB_IDX
-      : type === 'deopt' ? SummaryView.DEOPT_TAB_IDX
-      : SummaryView.ICS_TAB_IDX
-    )
+    const markerSummaryTabIdx =
+      type === 'code'
+        ? SummaryView.OPT_TAB_IDX
+        : type === 'deopt'
+        ? SummaryView.DEOPT_TAB_IDX
+        : SummaryView.ICS_TAB_IDX
     onmarkerClicked(id)
     if (markerSummaryTabIdx !== selectedSummaryTabIdx) {
       onsummaryTabIdxChanged(markerSummaryTabIdx)

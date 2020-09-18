@@ -5,20 +5,21 @@ const { Component } = React
 const summarizeFile = require('../../lib/grouping/summarize-file')
 const assert = require('assert')
 
-const severityClassNames = [
-    'green i tc'
-  , 'blue tc'
-  , 'red b tc'
-]
+const severityClassNames = ['green i tc', 'blue tc', 'red b tc']
 
 const underlineTdClass = ' pl2 pr2 underlined '
 
 function coloredTds(arr) {
   return arr.map((x, idx) => {
-    const className = x > 0
-      ? severityClassNames[idx] + ' tr' + underlineTdClass
-      : ' pl2 pr2 tc i gray' + underlineTdClass
-    return <td key={idx} className={className}>{x}</td>
+    const className =
+      x > 0
+        ? severityClassNames[idx] + ' tr' + underlineTdClass
+        : ' pl2 pr2 tc i gray' + underlineTdClass
+    return (
+      <td key={idx} className={className}>
+        {x}
+      </td>
+    )
   })
 }
 
@@ -30,7 +31,11 @@ class FilesView extends Component {
   constructor(props) {
     super(props)
     const { onfileClicked } = props
-    assert.equal(typeof onfileClicked, 'function', 'need to pass onfileClicked function')
+    assert.equal(
+      typeof onfileClicked,
+      'function',
+      'need to pass onfileClicked function'
+    )
   }
 
   render() {
@@ -38,29 +43,31 @@ class FilesView extends Component {
     const tableHeader = this._renderTableHeader()
     const rows = []
     const filesSeverities = Array.from(groups)
-      .map(([ file, info ]) => {
+      .map(([file, info]) => {
         const { deopts, ics, codes } = info
         const summary = summarizeFile({ ics, deopts, codes })
         return { file, summary }
       })
-      .filter(({ summary }) => includeAllSeverities || summary.hasCriticalSeverities)
+      .filter(
+        ({ summary }) => includeAllSeverities || summary.hasCriticalSeverities
+      )
       .sort(bySeverityScoreDesc)
 
     for (const { file, summary } of filesSeverities) {
       const { icSeverities, deoptSeverities, codeStates } = summary
       const { relativePath } = groups.get(file)
       const rendered = this._renderFile({
-          file
-        , relativePath
-        , icSeverities
-        , deoptSeverities
-        , codeStates
+        file,
+        relativePath,
+        icSeverities,
+        deoptSeverities,
+        codeStates,
       })
       rows.push(rendered)
     }
     return (
       <div className={className}>
-        <table cellSpacing='0'>
+        <table cellSpacing="0">
           {tableHeader}
           <tbody>{rows}</tbody>
         </table>
@@ -75,9 +82,15 @@ class FilesView extends Component {
       <thead>
         <tr>
           <td className={topHeaderClass + ' '}>File</td>
-          <td colSpan='3' className={topHeaderClass}>Optimizations</td>
-          <td colSpan='3' className={topHeaderClass}>Deoptimizations</td>
-          <td colSpan='3' className={topHeaderClass}>Inline Caches</td>
+          <td colSpan="3" className={topHeaderClass}>
+            Optimizations
+          </td>
+          <td colSpan="3" className={topHeaderClass}>
+            Deoptimizations
+          </td>
+          <td colSpan="3" className={topHeaderClass}>
+            Inline Caches
+          </td>
         </tr>
         <tr>
           <td className={subHeaderClass} />
@@ -95,7 +108,13 @@ class FilesView extends Component {
     )
   }
 
-  _renderFile({ file, relativePath, deoptSeverities, icSeverities, codeStates }) {
+  _renderFile({
+    file,
+    relativePath,
+    deoptSeverities,
+    icSeverities,
+    codeStates,
+  }) {
     const { selectedFile } = this.props
 
     // Optimized = 3, Compile = 0, but we show them in order of serverity, so we reverse
@@ -107,10 +126,8 @@ class FilesView extends Component {
     const selectedClass = file === selectedFile ? 'bg-light-yellow' : ''
     return (
       <tr key={relativePath} className={'normalrow ' + selectedClass}>
-        <td class='underlined'>
-          <a className={'items pl2 pr2'}
-            href='#'
-            onClick={onfileClicked}>
+        <td class="underlined">
+          <a className={'items pl2 pr2'} href="#" onClick={onfileClicked}>
             {relativePath}
           </a>
         </td>

@@ -27,7 +27,8 @@ function determineArgs(args) {
     throw Error(
       `The node binary must immediately follow the double dash (--)
   deoptigate -- node [nodeFlags] script.js [scriptFlags]
-    `)
+    `
+    )
   }
   const afterDashesArgs = afterDashes.slice(1)
 
@@ -49,11 +50,9 @@ function determineArgs(args) {
     extraExecArgv.push(arg)
   }
 
-  return (
-    first === 'node'
+  return first === 'node'
     ? { argv, extraExecArgv }
     : { argv, extraExecArgv, nodeExecutable: first }
-  )
 }
 
 async function createDirIfMissing(dir) {
@@ -68,12 +67,14 @@ async function createDirIfMissing(dir) {
   // It did exist, ensure it is a directory
   const statInfo = await stat(dir)
   if (!statInfo.isDirectory()) {
-    throw new Error(`Found ${dir}, but it wasn't a directory, please remove it.`)
+    throw new Error(
+      `Found ${dir}, but it wasn't a directory, please remove it.`
+    )
   }
 }
 
 async function createLog(args, head, simpleHead) {
-  const { extraExecArgv, argv,  nodeExecutable } = determineArgs(args)
+  const { extraExecArgv, argv, nodeExecutable } = determineArgs(args)
 
   const logDir = `${tmpdir()}/deoptigate`
   await createDirIfMissing(logDir)
@@ -81,9 +82,9 @@ async function createLog(args, head, simpleHead) {
   const logFile = `${tmpdir()}/deoptigate/v8.log`
 
   const execArgv = [
-      '--trace-ic'
-    , `--logfile=${logFile}`
-    , '--no-logfile-per-isolate'
+    '--trace-ic',
+    `--logfile=${logFile}`,
+    '--no-logfile-per-isolate',
   ].concat(extraExecArgv)
 
   const spawnArgs = { execArgv, argv }
@@ -91,10 +92,10 @@ async function createLog(args, head, simpleHead) {
 
   const { termination } = spawn(spawnArgs)
   const code = await termination
-  const terminationMsg = (code == null
-    ? 'process was interrupted'
-    : 'process completed with code ' + code
-  )
+  const terminationMsg =
+    code == null
+      ? 'process was interrupted'
+      : 'process completed with code ' + code
   console.log(`\n${head} ${brightBlack(terminationMsg)}`)
   console.log(`${simpleHead} ${brightBlack('logfile written to ' + logFile)}`)
   return logFile

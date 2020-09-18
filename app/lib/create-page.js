@@ -1,11 +1,17 @@
 'use strict'
 
 const fs = require('fs')
-const mainCss = fs.readFileSync(require.resolve('../build/deoptigate.css'), 'utf8')
-const mainJs = fs.readFileSync(require.resolve('../build/deoptigate.js'), 'utf8')
+const mainCss = fs.readFileSync(
+  require.resolve('../build/deoptigate.css'),
+  'utf8'
+)
+const mainJs = fs.readFileSync(
+  require.resolve('../build/deoptigate.js'),
+  'utf8'
+)
 
 function createPage() {
-return `
+  return `
 <!DOCTYPE html>
 <html>
   <head>
