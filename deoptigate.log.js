@@ -1,18 +1,16 @@
 'use strict'
 
-const { promisify } = require('util')
-const fs = require('fs')
 const path = require('path')
-const readFile = promisify(fs.readFile)
 
 const { processLogContent, deoptigate } = require('./')
+const lineReader = require('./lib/line-reader')
 const resolveFiles = require('./lib/grouping/resolve-files')
 const groupByFile = require('./lib/grouping/group-by-file')
 
 async function extractDataFromLog(p, { icStateChangesOnly, root }) {
-  const txt = await readFile(p, 'utf8')
+  const lines = await lineReader(p, 'utf-8')
   root = root == null ? path.dirname(p) : root
-  const processed = processLogContent(txt, root)
+  const processed = await processLogContent(lines, root)
   if (icStateChangesOnly) processed.filterIcStateChanges()
   return processed
 }

@@ -256,9 +256,11 @@ class DeoptProcessor extends LogReader {
   }
 }
 
-function processLogContent(txt, root) {
+async function processLogContent(lines, root) {
   const deoptProcessor = new DeoptProcessor(root)
-  deoptProcessor.processString(txt)
+  for await (const line of lines) {
+    deoptProcessor.processLogLine(line)
+  }
   deoptProcessor.filterIcStateChanges()
 
   return deoptProcessor
