@@ -76,7 +76,7 @@ class SummaryView extends Component {
         <div className='flex flex-row'>
           {this._renderTabHeader('Optimizations', OPT_TAB_IDX)}
           {this._renderTabHeader('Deoptimizations', DEOPT_TAB_IDX)}
-          {this._renderTabHeader('Incline Caches', ICS_TAB_IDX)}
+          {this._renderTabHeader('Inline Caches', ICS_TAB_IDX)}
         </div>
         <div>
           {renderedCodes}
