@@ -221,6 +221,12 @@ class DeoptProcessor extends LogReader {
       next = string.indexOf('\n', current)
       if (next === -1) break
       line = string.substring(current, next)
+      // TODO: Remove next line once v8-tools-core is updated to include the fix
+      // from https://chromium-review.googlesource.com/c/v8/v8/+/1169049/
+      // Effectively assume backslashes are Windows separators than can be replaced
+      // with a forward-slash benignly. This replaces an escaped backslash "\\" in
+      // the log with a (non-escaped) forward slash.
+      line = line.replace(/\\\\/g, "/")
       current = next + 1
       this.processLogLine(line)
     }
