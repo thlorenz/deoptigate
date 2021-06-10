@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+const path = require('path')
+
 const { blue, red } = require('ansicolors')
 const simpleHead = blue('deoptigate')
 const happyHead = blue('deoptigate 💪')
@@ -11,11 +13,19 @@ const createLog = require('./deoptigate.create-log')
 
 ;(async () => {
   try {
-    const log = (process.argv.length <= 2
+    const argv = process.argv
+    const argLength = process.argv.length
+    const shouldOpen = (argv[2] == '--open' || argv[2] == '-o')
+    if (argLength == 4 && shouldOpen) {
+      return await openLog(path.resolve(argv[3]), happyHead)
+    }
+
+    const log = (argLength <= 2
       ? await findLog(happyHead)
-      : await createLog(process.argv.slice(2), happyHead, simpleHead)
+      : await createLog(argv.slice(2), happyHead, simpleHead)
     )
     await openLog(log, happyHead)
+
   } catch (err) {
     console.error(`${errorHead}: ${err}`)
   }

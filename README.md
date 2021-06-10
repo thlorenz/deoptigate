@@ -82,6 +82,10 @@ deoptigate -- node --allow-natives-syntax app.js
 
 Simply run `deoptigate` from the directory that contains the log file(s).
 
+### Deoptigate existing `*.log`
+
+Run `deoptigate --open path/to/file.log`. You may also use `-o`.
+
 ## License
 
 MIT
