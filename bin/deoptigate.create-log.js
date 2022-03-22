@@ -81,7 +81,7 @@ async function createLog(args, head, simpleHead) {
   const logFile = `${tmpdir()}/deoptigate/v8.log`
 
   const execArgv = [
-      '--trace-ic'
+      '--log-ic'
     , `--logfile=${logFile}`
     , '--no-logfile-per-isolate'
   ].concat(extraExecArgv)
