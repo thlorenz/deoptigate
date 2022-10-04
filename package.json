@@ -25,6 +25,7 @@
     "ispawn": "~0.2.0",
     "mkdirp": "~0.5.1",
     "opn": "~5.4.0",
+    "semver": "^7.3.6",
     "v8-tools-core": "~0.1.1"
   },
   "keywords": [],

@@ -8,6 +8,7 @@ const { promisify } = require('util')
 const access = promisify(fs.access)
 const mkdir = promisify(fs.mkdir)
 const stat = promisify(fs.stat)
+const semver = require('semver')
 
 const { brightBlack } = require('ansicolors')
 
@@ -79,9 +80,10 @@ async function createLog(args, head, simpleHead) {
   await createDirIfMissing(logDir)
 
   const logFile = `${tmpdir()}/deoptigate/v8.log`
+  let inlineCacheArg = semver.gte(process.version, '16.0.0') ? '--log-ic' : '--trace-ic'
 
   const execArgv = [
-      '--trace-ic'
+      inlineCacheArg,
     , `--logfile=${logFile}`
     , '--no-logfile-per-isolate'
   ].concat(extraExecArgv)
