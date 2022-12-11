@@ -88,7 +88,7 @@ async function createLog(args, head, simpleHead) {
     , '--no-logfile-per-isolate'
   ].concat(extraExecArgv)
 
-  const spawnArgs = { execArgv, argv }
+  const spawnArgs = { execArgv: execArgv.filter(Boolean), argv }
   if (nodeExecutable != null) spawnArgs.node = nodeExecutable
 
   const { termination } = spawn(spawnArgs)
