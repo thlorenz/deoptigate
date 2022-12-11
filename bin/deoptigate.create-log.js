@@ -83,12 +83,12 @@ async function createLog(args, head, simpleHead) {
   let inlineCacheArg = semver.gte(process.version, '16.0.0') ? '--log-ic' : '--trace-ic'
 
   const execArgv = [
-      inlineCacheArg,
+      inlineCacheArg
     , `--logfile=${logFile}`
     , '--no-logfile-per-isolate'
   ].concat(extraExecArgv)
 
-  const spawnArgs = { execArgv: execArgv.filter(Boolean), argv }
+  const spawnArgs = { execArgv, argv }
   if (nodeExecutable != null) spawnArgs.node = nodeExecutable
 
   const { termination } = spawn(spawnArgs)
